@@ -2,9 +2,9 @@ from setuptools import setup, find_packages
 
 setup(
     name="notepad-cleanup",
-    version="0.1.0",
+    version="0.1.3",
     description="Automated Notepad window/tab text extraction and organization tool",
-    author="Dustin",
+    author="djdarcy",
     author_email="6962246+djdarcy@users.noreply.github.com",
     packages=find_packages(),
     package_data={
@@ -22,9 +22,11 @@ setup(
             "notepad-cleanup=notepad_cleanup.cli:main",
         ],
     },
+    license="GPL-3.0-or-later",
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: End Users/Desktop",
+        "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
         "Programming Language :: Python :: 3",
         "Operating System :: Microsoft :: Windows",
         "Topic :: Utilities",
