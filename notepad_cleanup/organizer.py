@@ -1,24 +1,19 @@
 """AI-powered organization of extracted Notepad text.
 
-Builds a prompt with file contents inline, asks Claude for a JSON plan,
-then executes the plan locally (copy/rename/group).
+Claude reads the extracted files via its Read tool, returns a JSON plan,
+then our code executes the plan locally (copy/rename/group).
 """
 
 import json
 import os
-import signal
 import shutil
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 
 PROMPT_TEMPLATE_PATH = Path(__file__).parent / "prompts" / "organize.md"
-
-# Max chars to include inline per file; larger files get a preview
-PREVIEW_LIMIT = 2000
-# Files above this size are "large" and only get a short preview
-LARGE_FILE_THRESHOLD = 50000
 
 
 def load_prompt_template():
@@ -26,84 +21,20 @@ def load_prompt_template():
     return PROMPT_TEMPLATE_PATH.read_text(encoding="utf-8")
 
 
-def build_file_listing(manifest_path):
-    """
-    Build a text listing of all extracted files with their content inline.
-
-    Returns: (listing_text, file_count)
-    """
-    manifest_path = Path(manifest_path)
-    base_dir = manifest_path.parent
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-
-    lines = []
-    file_count = 0
-
-    for win in manifest.get("windows", []):
-        folder = win["folder"]
-        title = win.get("title", "Unknown")
-        has_unsaved = win.get("has_unsaved", False)
-
-        for tab in win.get("tabs", []):
-            filename = tab.get("filename")
-            if not filename:
-                continue  # empty tab
-
-            file_count += 1
-            rel_path = f"{folder}/{filename}"
-            chars = tab.get("chars", 0)
-            label = tab.get("label", "")
-            content_type = tab.get("content_type", "unknown")
-
-            # Read the actual file
-            file_path = base_dir / folder / filename
-            try:
-                text = file_path.read_text(encoding="utf-8", errors="replace")
-            except Exception:
-                text = "(could not read file)"
-
-            lines.append(f"### {rel_path}")
-            lines.append(f"- Window title: {title}")
-            lines.append(f"- Tab label: {label}")
-            lines.append(f"- Content type hint: {content_type}")
-            lines.append(f"- Size: {chars} chars")
-            if has_unsaved:
-                lines.append("- Has unsaved changes: yes")
-
-            if chars > LARGE_FILE_THRESHOLD:
-                preview = text[:500].rstrip()
-                lines.append(f"- **PREVIEW** (file too large to include fully):")
-                lines.append(f"```\n{preview}\n```")
-            elif chars > PREVIEW_LIMIT:
-                lines.append(f"```\n{text[:PREVIEW_LIMIT].rstrip()}\n... ({chars - PREVIEW_LIMIT} more chars)\n```")
-            else:
-                lines.append(f"```\n{text}\n```")
-
-            lines.append("")
-
-    return "\n".join(lines), file_count
-
-
 def generate_prompt(manifest_path):
     """
-    Generate the AI organization prompt with file contents inline.
-
-    Args:
-        manifest_path: Path to manifest.json
+    Generate the AI organization prompt from a manifest file.
 
     Returns: formatted prompt string
     """
     manifest_path = Path(manifest_path)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-    file_listing, _ = build_file_listing(manifest_path)
-
     template = load_prompt_template()
     return template.format(
         window_count=manifest.get("window_count", 0),
         tab_count=manifest.get("tab_count", 0),
         total_chars=f"{manifest.get('total_chars', 0):,}",
-        file_listing=file_listing,
     )
 
 
@@ -123,7 +54,7 @@ def find_claude_cli():
 
 def invoke_claude_cli(prompt, working_dir, verbose=False, log_file=None):
     """
-    Invoke Claude Code CLI in non-interactive mode.
+    Invoke Claude Code CLI in non-interactive mode with Read tool access.
 
     Returns: (success, output_text)
     """
@@ -137,12 +68,12 @@ def invoke_claude_cli(prompt, working_dir, verbose=False, log_file=None):
     prompt_file = working_dir / "_organize_prompt.md"
     prompt_file.write_text(prompt, encoding="utf-8")
 
-    # Pipe prompt via stdin to avoid Windows 32K command-line length limit
-    # -p with no argument reads from stdin
     cmd = [
         claude_path,
         "--output-format", "text",
+        "--allowedTools", "Read,Grep",
         "-p",
+        prompt,
     ]
 
     # Remove CLAUDECODE env var to allow subprocess invocation
@@ -160,20 +91,16 @@ def invoke_claude_cli(prompt, working_dir, verbose=False, log_file=None):
                 cmd,
                 cwd=str(working_dir),
                 env=env,
-                stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0,
             )
-            # Send prompt via stdin then close
-            process.stdin.write(prompt)
-            process.stdin.close()
-
             output_lines = []
-            try:
+
+            # Read stdout in a daemon thread so Ctrl+C isn't blocked
+            def _reader():
                 for line in process.stdout:
                     output_lines.append(line)
                     sys.stdout.write(line)
@@ -181,6 +108,14 @@ def invoke_claude_cli(prompt, working_dir, verbose=False, log_file=None):
                     if log_fh:
                         log_fh.write(line)
                         log_fh.flush()
+
+            reader = threading.Thread(target=_reader, daemon=True)
+            reader.start()
+
+            try:
+                # poll with short sleeps so KeyboardInterrupt can fire
+                while reader.is_alive():
+                    reader.join(timeout=0.5)
                 process.wait(timeout=600)
             except KeyboardInterrupt:
                 process.kill()
@@ -201,7 +136,6 @@ def invoke_claude_cli(prompt, working_dir, verbose=False, log_file=None):
                 cmd,
                 cwd=str(working_dir),
                 env=env,
-                input=prompt,
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
@@ -241,7 +175,6 @@ def parse_plan(raw_output):
     # Strip markdown code fencing if present
     if text.startswith("```"):
         lines = text.split("\n")
-        # Remove first line (```json or ```) and last line (```)
         lines = lines[1:]
         if lines and lines[-1].strip() == "```":
             lines = lines[:-1]

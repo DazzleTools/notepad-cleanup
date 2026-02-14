@@ -91,13 +91,10 @@ def extract_phase2(windows, phase1_results, on_progress=None):
         # We don't know which tabs are loaded vs unloaded by index,
         # so we iterate all tabs via UIA, read each, and skip duplicates.
         try:
-            # Get tab count from NotepadTextBox (more reliable than UIA TabItem
-            # which can bleed across windows)
-            uia_tabs = win.children(control_type="Tab")
-            if uia_tabs:
-                tab_items = uia_tabs[0].children(control_type="TabItem")
-            else:
-                tab_items = []
+            # Use descendants() scoped to this window handle.
+            # WinUI TabItems aren't direct children of the Tab control,
+            # but descendants() on a handle-connected window is properly scoped.
+            tab_items = win.descendants(control_type="TabItem")
         except Exception:
             tab_items = []
 

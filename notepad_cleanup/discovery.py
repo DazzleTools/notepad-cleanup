@@ -72,19 +72,29 @@ def read_richedit_text(child_hwnd):
 
 def get_tab_count(hwnd):
     """
-    Estimate the number of tabs in a Notepad window.
-    Uses NotepadTextBox child count as a proxy — each tab has one NotepadTextBox.
+    Count the actual number of tabs in a Notepad window via UIA TabItem descendants.
+    This counts all tabs including unloaded ones (which have no RichEditD2DPT child).
+    Note: WinUI TabItems aren't direct children of the Tab control, so we use
+    descendants() scoped to the specific window handle (avoids cross-window bleed).
     """
-    count = 0
+    try:
+        from pywinauto import Application
+        app = Application(backend="uia").connect(handle=hwnd)
+        win = app.window(handle=hwnd)
+        tab_items = win.descendants(control_type="TabItem")
+        return len(tab_items) if tab_items else 1
+    except Exception:
+        # Fallback: count loaded NotepadTextBox children
+        count = 0
 
-    def callback(child_hwnd, _):
-        nonlocal count
-        if win32gui.GetClassName(child_hwnd) == "NotepadTextBox":
-            count += 1
-        return True
+        def callback(child_hwnd, _):
+            nonlocal count
+            if win32gui.GetClassName(child_hwnd) == "NotepadTextBox":
+                count += 1
+            return True
 
-    win32gui.EnumChildWindows(hwnd, callback, None)
-    return max(count, 1)
+        win32gui.EnumChildWindows(hwnd, callback, None)
+        return max(count, 1)
 
 
 def get_foreground_hwnd():
