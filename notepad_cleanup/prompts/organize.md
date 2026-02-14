@@ -29,21 +29,22 @@ Return ONLY a JSON array. No markdown fencing, no explanation, just raw JSON:
   }},
   {{
     "source": "window02/tab01.txt",
-    "category": "quick-notes",
-    "new_name": null,
-    "reason": "Short note, group into quick-notes.md"
+    "category": "personal-notes",
+    "new_name": "quick-reminder-about-groceries.txt",
+    "reason": "Short personal note"
   }}
 ]
 
 ## Rules for naming and categorizing
 
+- Every file MUST get its own `new_name` — never set it to null
+- Each tab is preserved as an individual file, even short notes
 - Use lowercase-with-dashes for folder and file names
 - Keep `.txt` for plain text and general notes
 - Use appropriate extensions for code (`.py`, `.js`, `.json`, `.bat`, `.ps1`, etc.)
 - Use appropriate extensions for configs (`.ini`, `.conf`, `.yaml`, `.toml`)
 - Use `.md` for markdown content
-- For short notes under 100 characters, set `new_name` to `null` and category to `"quick-notes"` — these will be grouped into a single file
 - For files that already have a proper name in their window title, preserve it
 - Pick descriptive names based on actual content, not just the first line
-- Categories should be thematic groupings like: `code-snippets`, `personal-notes`, `project-planning`, `config-files`, `lyrics-and-writing`, `chat-logs`, `commands-and-scripts`, `reference`, `misc`, `quick-notes`, etc. Use whatever categories make sense for this collection.
+- Categories should be thematic groupings like: `code-snippets`, `personal-notes`, `project-planning`, `config-files`, `lyrics-and-writing`, `chat-logs`, `commands-and-scripts`, `reference`, `misc`, etc. Use whatever categories make sense for this collection.
 - NEVER modify or delete the original files — you are only producing a JSON plan

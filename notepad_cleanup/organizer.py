@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 
 
@@ -113,18 +114,17 @@ def invoke_claude_cli(prompt, working_dir, verbose=False, log_file=None):
             reader.start()
 
             try:
-                # poll with short sleeps so KeyboardInterrupt can fire
-                while reader.is_alive():
-                    reader.join(timeout=0.5)
-                process.wait(timeout=600)
+                # Poll process status with time.sleep() — sleep is reliably
+                # interruptible by KeyboardInterrupt on Windows, unlike
+                # thread.join() which can swallow the signal.
+                while process.poll() is None:
+                    time.sleep(0.2)
+                # Process exited; drain any remaining stdout
+                reader.join(timeout=5)
             except KeyboardInterrupt:
                 process.kill()
                 process.wait()
                 return False, "Cancelled by user (Ctrl+C)"
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait()
-                return False, "Claude CLI timed out after 10 minutes"
 
             output = "".join(output_lines)
             if process.returncode == 0:
@@ -201,6 +201,9 @@ def execute_plan(plan, base_dir):
     """
     Execute the organization plan by copying/renaming files.
 
+    Every file gets its own named copy in category folders — no compaction
+    into quick-notes.md. Each tab is preserved as an individual file.
+
     Args:
         plan: list of dicts with source, category, new_name, reason
         base_dir: path to the extraction output directory
@@ -208,12 +211,11 @@ def execute_plan(plan, base_dir):
     Returns: (summary_text, stats_dict)
     """
     base_dir = Path(base_dir)
-    reorg_dir = base_dir / "_reorganized"
-    reorg_dir.mkdir(exist_ok=True)
+    organized_dir = base_dir / "organized"
+    organized_dir.mkdir(exist_ok=True)
 
-    stats = {"copied": 0, "quick_notes": 0, "skipped": 0, "errors": 0}
+    stats = {"copied": 0, "skipped": 0, "errors": 0}
     categories = {}
-    quick_notes = []
     details = []
 
     for entry in plan:
@@ -228,19 +230,12 @@ def execute_plan(plan, base_dir):
             details.append(f"  ERROR: {source} not found")
             continue
 
-        # Quick notes get grouped
-        if category == "quick-notes" or new_name is None:
-            try:
-                text = source_path.read_text(encoding="utf-8", errors="replace")
-                quick_notes.append((source, text.strip(), reason))
-                stats["quick_notes"] += 1
-            except Exception as e:
-                stats["errors"] += 1
-                details.append(f"  ERROR reading {source}: {e}")
-            continue
+        # If Claude didn't provide a name, generate one from the source path
+        if not new_name:
+            new_name = source.replace("/", "_").replace("\\", "_")
 
         # Create category folder and copy
-        cat_dir = reorg_dir / category
+        cat_dir = organized_dir / category
         cat_dir.mkdir(exist_ok=True)
 
         dest_path = cat_dir / new_name
@@ -253,22 +248,10 @@ def execute_plan(plan, base_dir):
             stats["errors"] += 1
             details.append(f"  ERROR copying {source}: {e}")
 
-    # Write quick notes file
-    if quick_notes:
-        qn_path = reorg_dir / "quick-notes.md"
-        lines = ["# Quick Notes\n", "Short notes extracted from Notepad tabs.\n"]
-        for source, text, reason in quick_notes:
-            lines.append(f"## From {source}")
-            if reason:
-                lines.append(f"*{reason}*\n")
-            lines.append(f"{text}\n")
-        qn_path.write_text("\n".join(lines), encoding="utf-8")
-
     # Write summary
     summary_lines = ["# Organization Summary\n"]
-    summary_lines.append(f"- **Files organized**: {stats['copied'] + stats['quick_notes']}")
+    summary_lines.append(f"- **Files organized**: {stats['copied']}")
     summary_lines.append(f"- **Categories**: {len(categories)}")
-    summary_lines.append(f"- **Quick notes grouped**: {stats['quick_notes']}")
     if stats["errors"]:
         summary_lines.append(f"- **Errors**: {stats['errors']}")
     summary_lines.append("")
@@ -280,16 +263,11 @@ def execute_plan(plan, base_dir):
             summary_lines.append(f"- {f}")
         summary_lines.append("")
 
-    if quick_notes:
-        summary_lines.append(f"### quick-notes ({len(quick_notes)} entries)")
-        summary_lines.append("- quick-notes.md")
-        summary_lines.append("")
-
     summary_lines.append("## File Mapping\n")
     summary_lines.extend(details)
 
     summary_text = "\n".join(summary_lines)
-    summary_path = reorg_dir / "_summary.md"
+    summary_path = organized_dir / "_summary.md"
     summary_path.write_text(summary_text, encoding="utf-8")
 
     return summary_text, stats

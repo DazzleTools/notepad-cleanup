@@ -50,6 +50,15 @@ def extract_phase1(windows):
     return results
 
 
+def _normalize_for_dedup(text):
+    """Normalize text for dedup comparison across extraction methods."""
+    if not text:
+        return ""
+    # Normalize line endings and strip trailing whitespace per line
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    return "\n".join(line.rstrip() for line in lines).strip()
+
+
 def extract_phase2(windows, phase1_results, on_progress=None):
     """
     Extract unloaded tabs via UIA TabItem.Select().
@@ -67,33 +76,37 @@ def extract_phase2(windows, phase1_results, on_progress=None):
     original_fg = get_foreground_hwnd()
     new_results = {}
 
+    # Global dedup: build hash set from ALL Phase 1 text across ALL windows.
+    # This prevents the same content from being re-extracted in different windows
+    # (e.g. recently-visited tabs that appear loaded in multiple Notepad instances).
+    global_hashes = set()
+    for hwnd, tabs in phase1_results.items():
+        for _, text, _, _ in tabs:
+            if text:
+                global_hashes.add(hash(_normalize_for_dedup(text)))
+
+    from .discovery import get_tab_count
+
     for wi, w in enumerate(windows):
         hwnd = w["hwnd"]
         phase1_tabs = phase1_results.get(hwnd, [])
         phase1_count = len(phase1_tabs)
 
-        # Get total tab count from NotepadTextBox children
-        from .discovery import get_tab_count
         total_tabs = get_tab_count(hwnd)
 
         # If Phase 1 got everything, skip
         if phase1_count >= total_tabs:
             continue
 
-        # Connect via UIA
+        # Connect via UIA — use window(handle=) not top_window() to avoid
+        # cross-window bleed since all Notepad instances share one PID.
         try:
             app = Application(backend="uia").connect(handle=hwnd)
-            win = app.top_window()
+            win = app.window(handle=hwnd)
         except Exception:
             continue
 
-        # We need to Select() each tab and read the Document control.
-        # We don't know which tabs are loaded vs unloaded by index,
-        # so we iterate all tabs via UIA, read each, and skip duplicates.
         try:
-            # Use descendants() scoped to this window handle.
-            # WinUI TabItems aren't direct children of the Tab control,
-            # but descendants() on a handle-connected window is properly scoped.
             tab_items = win.descendants(control_type="TabItem")
         except Exception:
             tab_items = []
@@ -111,12 +124,6 @@ def extract_phase2(windows, phase1_results, on_progress=None):
             except Exception:
                 pass
 
-        # Build set of Phase 1 text hashes for dedup
-        phase1_hashes = set()
-        for _, text, _, _ in phase1_tabs:
-            if text:
-                phase1_hashes.add(hash(text))
-
         new_tabs = []
         for i, tab in enumerate(tab_items):
             if on_progress:
@@ -126,26 +133,26 @@ def extract_phase2(windows, phase1_results, on_progress=None):
                 tab.select()
                 time.sleep(0.08)
 
-                # Read Document control
+                # Read via WM_GETTEXT (same method as Phase 1) for consistent
+                # text format. Selecting a tab loads its RichEditD2DPT control.
                 text = ""
-                try:
-                    docs = win.descendants(control_type="Document")
-                    if docs:
-                        text = docs[0].window_text()
-                except Exception:
-                    pass
+                richedit_hwnds = get_richedit_children(hwnd)
+                if richedit_hwnds:
+                    # The active tab's RichEditD2DPT is typically the last one
+                    # or the one that just appeared after select()
+                    text = read_richedit_text(richedit_hwnds[-1])
 
-                # Skip if we already have this text from Phase 1
-                if text and hash(text) in phase1_hashes:
+                if not text:
                     continue
 
-                # Skip empty
-                if not text:
+                # Global dedup — skip if any window already has this content
+                norm_hash = hash(_normalize_for_dedup(text))
+                if norm_hash in global_hashes:
                     continue
 
                 label = _make_tab_label(text)
                 new_tabs.append((phase1_count + len(new_tabs), text, label, None))
-                phase1_hashes.add(hash(text))
+                global_hashes.add(norm_hash)
 
             except Exception:
                 continue

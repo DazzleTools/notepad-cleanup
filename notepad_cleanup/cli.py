@@ -198,14 +198,13 @@ def organize(folder, backend, dry_run, verbose):
         summary, stats = execute_plan(plan, folder)
 
     console.print("[bold green]Organization complete![/bold green]\n")
-    console.print(f"  Files copied:     {stats['copied']}")
-    console.print(f"  Quick notes:      {stats['quick_notes']}")
+    console.print(f"  Files organized:  {stats['copied']}")
     if stats['errors']:
         console.print(f"  [red]Errors:         {stats['errors']}[/red]")
 
-    reorganized = folder / "_reorganized"
-    console.print(f"\n  Organized files: {reorganized}")
-    console.print(f"  Summary: {reorganized / '_summary.md'}")
+    organized = folder / "organized"
+    console.print(f"\n  Organized files: {organized}")
+    console.print(f"  Summary: {organized / '_summary.md'}")
     console.print(f"  Full log: {log_file}\n")
 
 
