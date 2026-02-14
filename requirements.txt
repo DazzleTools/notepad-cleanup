@@ -1,8 +1,9 @@
-# Project dependencies
-# Add your dependencies here
+# Runtime
+pywinauto>=0.6.9
+pywin32>=306
+psutil>=5.9.0
+click>=8.1.0
+rich>=13.0.0
 
-# Development dependencies
+# Development
 pytest>=7.0.0
-black>=23.0.0
-flake8>=6.0.0
-mypy>=1.0.0
