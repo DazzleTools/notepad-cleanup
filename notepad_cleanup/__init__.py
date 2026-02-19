@@ -1,3 +1,3 @@
 """notepad-cleanup: Automated Notepad window/tab text extraction and organization."""
 
-__version__ = "0.1.3"
+from ._version import __version__, get_version, get_display_version, get_base_version

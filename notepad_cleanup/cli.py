@@ -17,11 +17,28 @@ from .organizer import (generate_prompt, invoke_claude_cli, save_prompt_to_file,
 
 console = Console()
 
+CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
-@click.group()
-@click.version_option(__version__)
+
+@click.group(context_settings=CONTEXT_SETTINGS)
+@click.version_option(__version__, "-V", "--version")
 def main():
-    """Notepad Cleanup — extract and organize text from Notepad windows."""
+    """Extract and organize text from open Windows 11 Notepad windows.
+
+    \b
+    Two-phase extraction:
+      Phase 1  Silent read via WM_GETTEXT (no focus changes)
+      Phase 2  UIA tab switching for unloaded tabs (steals focus briefly)
+
+    \b
+    Typical workflow:
+      notepad-cleanup run --verbose        Full extract + AI organize
+      notepad-cleanup extract              Extract only
+      notepad-cleanup organize <folder>    Organize a previous extraction
+
+    Requires Windows 11 with Notepad open. The organize step requires
+    Claude Code CLI (https://claude.ai/claude-code).
+    """
     pass
 
 
@@ -32,8 +49,23 @@ def main():
               help="Only extract loaded tabs (no tab switching, no focus stealing)")
 @click.option("--yes", "-y", is_flag=True,
               help="Skip Phase 2 confirmation prompt")
-def extract(output_dir, silent_only, yes):
-    """Extract text from all open Notepad windows and tabs."""
+@click.option("--dry-run", is_flag=True,
+              help="Show what would be extracted without saving files")
+def extract(output_dir, silent_only, yes, dry_run):
+    """Extract text from all open Notepad windows and tabs.
+
+    \b
+    Finds every open Notepad window, reads all tab content, and saves
+    each tab as a separate text file with a manifest.json index.
+
+    \b
+    Examples:
+      notepad-cleanup extract                   Extract to Desktop
+      notepad-cleanup extract -o ./my-backup    Extract to custom folder
+      notepad-cleanup extract --silent-only     Skip unloaded tabs (safe, no focus stealing)
+      notepad-cleanup extract --dry-run         Preview without saving
+      notepad-cleanup extract -y                Auto-confirm Phase 2
+    """
 
     console.print("\n[bold]Notepad Cleanup — Extract[/bold]\n")
 
@@ -94,14 +126,31 @@ def extract(output_dir, silent_only, yes):
     elif remaining > 0 and silent_only:
         console.print(f"  [dim]{remaining} tabs skipped (--silent-only mode)[/dim]\n")
 
-    # Merge and save
+    # Merge results
     merged = merge_results(phase1, phase2)
 
+    total_extracted = sum(len(tabs) for tabs in merged.values())
+    total_chars = sum(sum(len(t[1]) for t in tabs if t[1]) for tabs in merged.values())
+
+    if dry_run:
+        console.print("[bold]Dry run — no files written[/bold]\n")
+        console.print(f"  Would extract [bold]{total_extracted}[/bold] tabs ({total_chars:,} chars)")
+        console.print(f"  From [bold]{len(windows)}[/bold] Notepad windows\n")
+        for w in windows:
+            hwnd = w["hwnd"]
+            tabs = merged.get(hwnd, [])
+            if tabs:
+                title = w.get("title", "Unknown")[:60]
+                console.print(f"  [dim]{title}[/dim] — {len(tabs)} tab(s)")
+                for _, text, label, _ in tabs:
+                    chars = len(text) if text else 0
+                    console.print(f"    {label[:50]}  ({chars:,} chars)")
+        console.print()
+        return None
+
+    # Save to disk
     console.print("[bold]Saving to disk...[/bold]")
     out_path, manifest = save_extraction(windows, merged, output_dir)
-
-    total_extracted = manifest["tab_count"]
-    total_chars = manifest["total_chars"]
 
     console.print(f"\n  [bold green]Saved {total_extracted} tabs ({total_chars:,} chars)[/bold green]")
     console.print(f"  Output: [link={out_path}]{out_path}[/link]")
@@ -121,7 +170,19 @@ def extract(output_dir, silent_only, yes):
 @click.option("--dry-run", is_flag=True, help="Show what would be run without executing")
 @click.option("--verbose", "-v", is_flag=True, help="Stream Claude CLI output in real time")
 def organize(folder, backend, dry_run, verbose):
-    """Organize extracted files using AI (Claude Code CLI)."""
+    """Organize extracted files into named categories using AI.
+
+    \b
+    Reads the extraction output, sends file metadata to Claude Code CLI,
+    receives a JSON plan (category + descriptive filename per tab), then
+    copies files into organized/<category>/ folders.
+
+    \b
+    Examples:
+      notepad-cleanup organize ~/Desktop/notepad-cleanup-2026-02-14_01-03-59
+      notepad-cleanup organize ./output --verbose
+      notepad-cleanup organize ./output --backend prompt-only   Save prompt for manual use
+    """
 
     folder = Path(folder)
     manifest_path = folder / "manifest.json"
@@ -217,7 +278,19 @@ def organize(folder, backend, dry_run, verbose):
 @click.option("--verbose", "-v", is_flag=True, help="Stream Claude CLI output in real time")
 @click.pass_context
 def run(ctx, output_dir, yes, backend, verbose):
-    """Extract and organize in one step."""
+    """Extract all Notepad tabs and organize them with AI in one step.
+
+    \b
+    This is the default workflow — runs extract followed by organize.
+    Output goes to Desktop/notepad-cleanup-TIMESTAMP/ by default.
+
+    \b
+    Examples:
+      notepad-cleanup run                  Default: extract + organize
+      notepad-cleanup run --verbose        See Claude's progress in real time
+      notepad-cleanup run -y --verbose     Skip confirmations, stream output
+      notepad-cleanup run -o ./backup      Custom output directory
+    """
     # Run extract
     ctx.invoke(extract, output_dir=output_dir, silent_only=False, yes=yes)
 

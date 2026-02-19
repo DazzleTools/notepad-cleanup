@@ -1,8 +1,16 @@
+import re
 from setuptools import setup, find_packages
+
+# Read version from _version.py (canonical source)
+# Use get_pip_version() for PEP 440 compliance
+_version_vars = {}
+with open("notepad_cleanup/_version.py") as f:
+    exec(f.read(), _version_vars)
+version = _version_vars["PIP_VERSION"]
 
 setup(
     name="notepad-cleanup",
-    version="0.1.3",
+    version=version,
     description="Automated Notepad window/tab text extraction and organization tool",
     author="djdarcy",
     author_email="6962246+djdarcy@users.noreply.github.com",

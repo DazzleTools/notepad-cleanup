@@ -124,6 +124,10 @@ def extract_phase2(windows, phase1_results, on_progress=None):
             except Exception:
                 pass
 
+        # Record which RichEditD2DPT handles exist before we start selecting.
+        # After each tab.select(), any NEW handle is the newly loaded tab.
+        known_richedits = set(get_richedit_children(hwnd))
+
         new_tabs = []
         for i, tab in enumerate(tab_items):
             if on_progress:
@@ -131,16 +135,20 @@ def extract_phase2(windows, phase1_results, on_progress=None):
 
             try:
                 tab.select()
-                time.sleep(0.08)
+                time.sleep(0.15)
 
-                # Read via WM_GETTEXT (same method as Phase 1) for consistent
-                # text format. Selecting a tab loads its RichEditD2DPT control.
+                # Find newly appeared RichEditD2DPT handles after select().
+                # Already-known handles belong to previously loaded tabs.
+                current_richedits = get_richedit_children(hwnd)
+                new_richedits = [rh for rh in current_richedits if rh not in known_richedits]
+
                 text = ""
-                richedit_hwnds = get_richedit_children(hwnd)
-                if richedit_hwnds:
-                    # The active tab's RichEditD2DPT is typically the last one
-                    # or the one that just appeared after select()
-                    text = read_richedit_text(richedit_hwnds[-1])
+                if new_richedits:
+                    text = read_richedit_text(new_richedits[-1])
+                    known_richedits.update(new_richedits)
+                elif current_richedits:
+                    # Tab was already loaded — read and let dedup handle it
+                    text = read_richedit_text(current_richedits[-1])
 
                 if not text:
                     continue

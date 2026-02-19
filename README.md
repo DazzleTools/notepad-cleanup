@@ -1,8 +1,9 @@
 # notepad-cleanup
 
-[![Python](https://img.shields.io/badge/python-3.10+-green.svg)](https://www.python.org/)
-[![Windows](https://img.shields.io/badge/platform-Windows%2011-blue.svg)](https://www.microsoft.com/windows)
-[![License: GPL v3](https://img.shields.io/badge/license-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![License: GPL v3](https://img.shields.io/badge/license-GPL%20v3-green.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
+[![GitHub Discussions](https://img.shields.io/github/discussions/DazzleTools/notepad-cleanup)](https://github.com/DazzleTools/notepad-cleanup/discussions)
+[![Platform](https://img.shields.io/badge/platform-Windows%2011-lightgrey.svg)](https://github.com/DazzleTools/notepad-cleanup)
 
 Extract and organize text from all open Windows 11 Notepad tabs using AI-powered categorization.
 
@@ -83,6 +84,7 @@ This extracts text from all open Notepad windows/tabs to `Desktop\notepad-cleanu
 **Options:**
 - `--output-dir PATH` — Custom output directory
 - `--silent-only` — Skip Phase 2 (no tab switching, only loaded tabs)
+- `--dry-run` — Preview what would be extracted without saving files
 - `--yes` — Skip Phase 2 confirmation prompt
 
 ### Organize with AI
@@ -105,7 +107,7 @@ This reads the extracted files using Claude Code CLI and organizes them into cat
 notepad-cleanup run
 ```
 
-Runs both steps automatically.
+Runs both steps automatically. Use `-h` on any command for full help.
 
 **Options:**
 - `--output-dir PATH` — Custom output directory
