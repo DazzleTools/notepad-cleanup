@@ -36,11 +36,16 @@ echo -e "${GREEN}✓${NC} Python syntax check passed"
 echo ""
 echo -e "${BLUE}Running tests...${NC}"
 
-# Run unit tests
-if python -m pytest tests/ -q 2>/dev/null; then
+# Run unit tests (exit code 5 = no tests collected, which is OK)
+TEST_EXIT=0
+python -m pytest tests/ -q 2>/dev/null || TEST_EXIT=$?
+
+if [ "$TEST_EXIT" -eq 0 ]; then
     echo -e "${GREEN}✓${NC} All tests passed"
+elif [ "$TEST_EXIT" -eq 5 ]; then
+    echo -e "${GREEN}✓${NC} No tests to run (exit code 5)"
 else
-    echo -e "${YELLOW}⚠${NC} Some tests failed"
+    echo -e "${YELLOW}⚠${NC} Some tests failed (exit code $TEST_EXIT)"
     if [[ "$CURRENT_BRANCH" == "main" ]] || [[ "$CURRENT_BRANCH" == "master" ]]; then
         echo -e "${RED}❌ BLOCKED: Cannot push to main with failing tests${NC}"
         exit 1
