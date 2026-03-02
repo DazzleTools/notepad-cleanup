@@ -1,0 +1,51 @@
+name: Create Issue from Draft
+
+# Trigger whenever a new .md file is pushed into .github/issue-drafts/.
+# The agent creates a file there and pushes; this workflow creates the
+# corresponding GitHub issue automatically using the built-in GITHUB_TOKEN.
+on:
+  push:
+    paths:
+      - '.github/issue-drafts/*.md'
+
+jobs:
+  create-issue:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write   # required to create issues
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2   # need HEAD~1 to detect newly added files
+
+      - name: Create issues from newly added draft files
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Collect files ADDED (not modified) in this push.
+          # Falls back to listing all drafts on the very first commit.
+          if git rev-parse HEAD~1 >/dev/null 2>&1; then
+            ADDED=$(git diff --name-only --diff-filter=A HEAD~1 HEAD \
+                    -- '.github/issue-drafts/*.md' 2>/dev/null || true)
+          else
+            ADDED=$(ls .github/issue-drafts/*.md 2>/dev/null || true)
+          fi
+
+          if [ -z "$ADDED" ]; then
+            echo "No new issue draft files detected."
+            exit 0
+          fi
+
+          echo "New draft files found:"
+          echo "$ADDED"
+
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            # Skip the README if one exists in the folder
+            [ "$(basename "$file")" = "README.md" ] && continue
+
+            echo "---"
+            echo "Processing: $file"
+            python3 scripts/create_issue_from_draft.py "$file"
+          done <<< "$ADDED"

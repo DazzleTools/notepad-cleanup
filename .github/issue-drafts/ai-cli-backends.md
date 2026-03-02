@@ -1,3 +1,8 @@
+---
+title: "Support additional AI CLI backends (OpenAI Codex CLI, Gemini CLI, etc.)"
+labels: enhancement, feature
+---
+
 ## Summary
 
 Support additional AI CLI backends beyond Claude Code CLI for the organize step, starting with OpenAI's Codex CLI (`codex`). Users should be able to choose their preferred AI tool via `--backend`.
