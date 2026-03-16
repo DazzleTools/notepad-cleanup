@@ -26,8 +26,10 @@ Windows 11 Notepad supports multiple tabs, making it easy to accumulate dozens o
 - **Silent extraction** — No focus stealing for already-loaded tabs
 - **Two-phase capture** — Gets all tabs including unloaded ones via UIA tab switching
 - **AI-powered organization** — Claude Code CLI reads and categorizes your content
-- **Deduplication** — Global dedup across all windows prevents redundant extraction
-- **CLI interface** — Simple commands: `extract`, `organize`, `run` (both steps)
+- **Cross-session deduplication** — Compare new extractions against historical sessions to find exact and near-duplicate files. See [docs/fuzzy-matching.md](docs/fuzzy-matching.md)
+- **Filesystem linking** — Replace duplicates with hardlinks, symlinks, or DazzleLink descriptors
+- **Configuration system** — Unified folder registry with `...` notation, MRU history, persistent settings. See [docs/config.md](docs/config.md)
+- **CLI interface** — Commands: `extract`, `compare`, `organize`, `diff`, `config`, `run`
 - **Manifest tracking** — JSON metadata about every extracted file
 - **Windows 11 native** — Built for the new Notepad with RichEditD2DPT controls
 
@@ -73,41 +75,90 @@ claude --version
 
 ## Usage
 
-### Extract only
+### Typical workflow
+
+```bash
+# 1. Extract all Notepad tabs
+notepad-cleanup extract
+
+# 2. Compare against previous sessions to find duplicates
+notepad-cleanup compare --last
+
+# 3. Spot-check matches in your diff tool
+notepad-cleanup diff --last
+
+# 4. Link duplicates (hardlink/symlink/dazzlelink)
+notepad-cleanup compare --last --link auto
+
+# 5. Organize new files with AI
+notepad-cleanup organize --last
+```
+
+### First-time setup
+
+```bash
+# Register your folders
+notepad-cleanup config add "C:\Users\YourName\Desktop\Notepad Organize"
+notepad-cleanup config set search "...1"
+notepad-cleanup config set diff_tool bcomp
+```
+
+After setup, `--last` and saved search dirs make the workflow short:
 
 ```bash
 notepad-cleanup extract
+notepad-cleanup compare --last --link auto
+notepad-cleanup organize --last
 ```
 
-This extracts text from all open Notepad windows/tabs to `Desktop\notepad-cleanup-TIMESTAMP\`.
+### Extract
 
-**Options:**
-- `--output-dir PATH` — Custom output directory
-- `--silent-only` — Skip Phase 2 (no tab switching, only loaded tabs)
-- `--dry-run` — Preview what would be extracted without saving files
-- `--yes` — Skip Phase 2 confirmation prompt
+```bash
+notepad-cleanup extract                   # Extract to default output folder (...)
+notepad-cleanup extract -o ./my-backup    # Custom output directory
+notepad-cleanup extract --silent-only     # Skip unloaded tabs (no focus stealing)
+notepad-cleanup extract --dry-run         # Preview without saving
+```
+
+### Compare
+
+```bash
+notepad-cleanup compare --last                # Use last extraction + saved search dirs
+notepad-cleanup compare --last --no-fuzzy     # Exact matches only (fast)
+notepad-cleanup compare --last --link auto    # Compare and link duplicates
+notepad-cleanup compare "...-2"               # Compare a specific past extraction
+notepad-cleanup compare --last -s "D:\archive"  # Search only this directory
+notepad-cleanup compare --last -ss "D:\archive" # Search this + saved dirs
+```
+
+See [docs/fuzzy-matching.md](docs/fuzzy-matching.md) for details on near-duplicate detection.
 
 ### Organize with AI
 
 ```bash
-notepad-cleanup organize "C:\Users\YourName\Desktop\notepad-cleanup-TIMESTAMP"
+notepad-cleanup organize --last               # Organize most recent extraction
+notepad-cleanup organize --last --verbose     # Stream Claude output in real-time
+notepad-cleanup organize --last --dry-run     # Preview without executing
 ```
 
-This reads the extracted files using Claude Code CLI and organizes them into categorized folders.
-
-**Options:**
-- `--backend claude` — Use Claude Code CLI (default)
-- `--backend prompt-only` — Save prompt without running Claude
-- `--dry-run` — Show what would be run without executing
-- `--verbose` — Stream Claude CLI output in real-time
-
-### Extract and organize (one command)
+### Configuration
 
 ```bash
-notepad-cleanup run
+notepad-cleanup config show                   # Show all settings
+notepad-cleanup config show ...               # Resolve a ... reference
+notepad-cleanup config add "C:\path"          # Register a folder
+notepad-cleanup config set search "...1"      # Add folder to search list
+notepad-cleanup config set diff_tool bcomp    # Set diff tool
 ```
 
-Runs both steps automatically. Use `-h` on any command for full help.
+See [docs/config.md](docs/config.md) for the full configuration reference including `...` notation.
+
+### One-command workflow
+
+```bash
+notepad-cleanup run                           # Extract + organize
+notepad-cleanup run --verbose                 # With real-time Claude output
+```
 
 **Options:**
 - `--output-dir PATH` — Custom output directory
