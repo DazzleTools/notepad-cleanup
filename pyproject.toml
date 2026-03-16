@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "notepad-cleanup"
+dynamic = ["version"]
+description = "Extract and organize text from Windows 11 Notepad tabs using AI"
+readme = "README.md"
+license = {text = "GPL-3.0-or-later"}
+requires-python = ">=3.10"
+authors = [
+    {name = "djdarcy", email = "6962246+djdarcy@users.noreply.github.com"},
+]
+keywords = ["windows", "notepad", "extraction", "organization", "ai", "dedup", "tabs", "clipboard"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: Microsoft :: Windows :: Windows 11",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Utilities",
+    "Topic :: Text Processing",
+]
+
+dependencies = [
+    "pywinauto>=0.6.9",
+    "pywin32>=306",
+    "psutil>=5.9.0",
+    "click>=8.1.0",
+    "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/DazzleTools/notepad-cleanup"
+Repository = "https://github.com/DazzleTools/notepad-cleanup"
+Issues = "https://github.com/DazzleTools/notepad-cleanup/issues"
+Discussions = "https://github.com/DazzleTools/notepad-cleanup/discussions"
+Changelog = "https://github.com/DazzleTools/notepad-cleanup/blob/main/CHANGELOG.md"
+
+[project.scripts]
+notepad-cleanup = "notepad_cleanup.cli:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "notepad_cleanup._version.PIP_VERSION"}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["notepad_cleanup", "notepad_cleanup.*"]
+
+[tool.setuptools.package-data]
+notepad_cleanup = ["prompts/*.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_functions = "test_*"
+python_classes = "Test*"

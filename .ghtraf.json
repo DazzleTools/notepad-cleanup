@@ -1,0 +1,13 @@
+{
+  "owner": "DazzleTools",
+  "repo": "notepad-cleanup",
+  "created": "2026-02-14",
+  "display_name": "notepad-cleanup",
+  "badge_gist_id": "a165031b15ecf9b6fdac066d0222a591",
+  "archive_gist_id": "cbf6fd41a34bbe60fa45e533df465492",
+  "dashboard_dir": "docs/stats",
+  "schema_version": 1,
+  "ci_workflows": [
+    "CI"
+  ]
+}

@@ -1,4 +1,3 @@
-import re
 from setuptools import setup, find_packages
 
 # Read version from _version.py (canonical source)
@@ -8,12 +7,23 @@ with open("notepad_cleanup/_version.py") as f:
     exec(f.read(), _version_vars)
 version = _version_vars["PIP_VERSION"]
 
+with open("README.md", encoding="utf-8") as f:
+    long_description = f.read()
+
 setup(
     name="notepad-cleanup",
     version=version,
-    description="Automated Notepad window/tab text extraction and organization tool",
+    description="Extract and organize text from Windows 11 Notepad tabs using AI",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
     author="djdarcy",
     author_email="6962246+djdarcy@users.noreply.github.com",
+    url="https://github.com/DazzleTools/notepad-cleanup",
+    project_urls={
+        "Bug Tracker": "https://github.com/DazzleTools/notepad-cleanup/issues",
+        "Discussions": "https://github.com/DazzleTools/notepad-cleanup/discussions",
+        "Changelog": "https://github.com/DazzleTools/notepad-cleanup/blob/main/CHANGELOG.md",
+    },
     packages=find_packages(),
     package_data={
         "notepad_cleanup": ["prompts/*.md"],
@@ -36,8 +46,12 @@ setup(
         "Intended Audience :: End Users/Desktop",
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
         "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
         "Operating System :: Microsoft :: Windows",
         "Topic :: Utilities",
+        "Topic :: Text Processing",
     ],
     python_requires=">=3.10",
 )

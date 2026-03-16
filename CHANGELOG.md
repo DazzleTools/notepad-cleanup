@@ -2,6 +2,20 @@
 
 All notable changes to notepad-cleanup will be documented in this file.
 
+## [0.2.1] - 2026-03-16
+
+### Added
+- GitHub Traffic Tracker (ghtraf): badge gists, archive gist, traffic-badges
+  workflow with CI trigger, stats dashboard at docs/stats/
+- PyPI publishing via Trusted Publisher (OIDC): publish.yml workflow triggers
+  on GitHub Release, builds and uploads automatically
+- pyproject.toml (modern Python packaging metadata, replaces setup.py as primary)
+- README badges: PyPI version, Release Date, Installs (via ghtraf endpoint)
+
+### Changed
+- setup.py updated with long_description, project_urls, additional classifiers
+- README updated with v0.2.0 features, new workflow section, links to docs
+
 ## [0.2.0] - 2026-03-16
 
 ### Added

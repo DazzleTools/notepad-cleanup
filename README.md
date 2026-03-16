@@ -1,7 +1,10 @@
 # notepad-cleanup
 
+[![PyPI](https://img.shields.io/pypi/v/notepad-cleanup?color=green)](https://pypi.org/project/notepad-cleanup/)
+[![Release Date](https://img.shields.io/github/release-date/DazzleTools/notepad-cleanup?color=green)](https://github.com/DazzleTools/notepad-cleanup/releases)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: GPL v3](https://img.shields.io/badge/license-GPL%20v3-green.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
+[![Installs](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/djdarcy/a165031b15ecf9b6fdac066d0222a591/raw/installs.json)](https://dazzletools.github.io/notepad-cleanup/stats/#installs)
 [![GitHub Discussions](https://img.shields.io/github/discussions/DazzleTools/notepad-cleanup)](https://github.com/DazzleTools/notepad-cleanup/discussions)
 [![Platform](https://img.shields.io/badge/platform-Windows%2011-lightgrey.svg)](https://github.com/DazzleTools/notepad-cleanup)
 
