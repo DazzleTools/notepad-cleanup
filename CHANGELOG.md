@@ -2,6 +2,65 @@
 
 All notable changes to notepad-cleanup will be documented in this file.
 
+## [0.2.0] - 2026-03-16
+
+### Added
+- **Deduplication system** (`compare` command): detect exact and near-duplicate files
+  across historical extraction sessions before organizing with AI
+  - Heuristic fuzzy matching with log-quadratic threshold curve (3.5% fit error
+    across anchor points). See `docs/fuzzy-matching.md` for derivation
+  - Configurable fuzzy modes: `--fuzzy small` (default, <50KB), `--fuzzy all`,
+    `--fuzzy "lte 100KB"`, `--no-fuzzy`
+  - Progress bar with per-file and per-candidate detail showing fuzzy pipeline
+    stage (`[vs: filename [chk:4]]`)
+  - Hash caching for fast repeat scans (mtime + size invalidation)
+  - Compare results caching (`_compare_results.json`) with staleness detection
+  - Historical session indexing: prefers `organized/` files over raw `window*/`
+    when both exist; only indexes known text file extensions
+- **Filesystem linking** (`--link` flag on `compare`): replace duplicates with
+  hardlinks, symlinks, or DazzleLink JSON descriptors
+  - Auto-detect best strategy per platform (`--link auto`)
+  - Backup originals as `.orig` before linking
+  - Confirmation prompt before modifying files
+  - Link manifest (`_dedup_links.json`) tracks all operations
+- **Diff script generation**: `compare` auto-generates `_compare_diffs.cmd`
+  (Windows) / `_compare_diffs.sh` (Unix) to spot-check each matched pair in
+  Beyond Compare, WinMerge, VS Code, or other configured diff tool
+- **`diff` command**: find and launch the generated diff script (`diff --last`)
+- **Configuration system** (`config` command, `~/.notepad-cleanup.json`):
+  - Unified folder registry with `...` notation (`...` = output, `...1`/`...2` =
+    other folders, `...-1`/`...-2` = recent extractions MRU)
+  - `ConfigManager` class in dedicated `config.py` module
+  - `config show`, `config add`, `config remove`, `config set`, `config unset`
+  - Folder roles: output and search are independent assignments
+  - Persistent diff tool, MRU depth, search dirs
+  - `...` expansion in all path arguments (resolved at runtime, never stored)
+  - `config show <...ref>` resolves any `...` reference for scripting
+  - Windows case-insensitive path comparison (`_paths_equal`)
+  - Environment variable expansion (`%USERPROFILE%`, `$HOME`)
+  - Stray quote stripping for trailing-backslash shell escaping issues
+  - Too-broad path detection (warns on home dir, drive roots)
+- **`--last` flag** on `compare`, `organize`, and `diff` commands: auto-uses
+  most recent extraction from MRU without copy-pasting paths
+- **MRU (Most Recently Used)** extraction history: configurable depth (default
+  10), referenced as `...-1`, `...-2`, etc.
+- **Search dir composition**: `-s` for explicit-only search, `-ss` for additive
+  (includes saved dirs), `-nsp` to exclude parent folder
+- **`docs/fuzzy-matching.md`**: threshold formula derivation, customization via
+  environment variables, fitting script reference
+- **`docs/config.md`**: full configuration reference covering folders, roles,
+  MRU, settings, `...` notation, and search behavior
+- Path shortening in display (`~\Desktop` instead of `C:\Users\...\Desktop`)
+
+### Changed
+- Default output directory: `~/Desktop/notepad-cleanup/nc-TIMESTAMP` (was
+  `~/Desktop/notepad-cleanup-TIMESTAMP`). Consolidates extractions into one folder
+- Extract now auto-registers output parent as a search dir in folder registry
+- Extract hints now show both `compare --last` and `organize --last` as next steps
+- Help text updated across all commands to reflect new workflow:
+  `extract -> compare -> organize`
+- Config functions extracted from `dedup.py` into dedicated `config.py` module
+
 ## [0.1.4] - 2026-02-19
 
 ### Added
