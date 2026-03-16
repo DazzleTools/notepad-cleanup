@@ -2,6 +2,18 @@
 
 All notable changes to notepad-cleanup will be documented in this file.
 
+## [0.2.2] - 2026-03-16
+
+### Added
+- docs/parameters.md: full command reference with all options, flags, and examples
+- docs/install.md: installation guide (pip, venv, source, Claude CLI)
+- Backfill script for ghtraf daily history (tests/one-offs/backfill_ghtraf_history.py)
+
+### Changed
+- README slimmed down: moved per-command details to docs/parameters.md, installation
+  details to docs/install.md. Kept How It Works, Output Structure, and Features
+- Restored tree-style output structure with visual hierarchy indicators
+
 ## [0.2.1] - 2026-03-16
 
 ### Added
