@@ -25,7 +25,8 @@ For virtual environments, source installs, and Claude Code CLI setup, see [docs/
 ```bash
 notepad-cleanup extract                    # Extract all Notepad tabs
 notepad-cleanup compare --last --link auto # Find and link duplicates
-notepad-cleanup organize --last            # AI-powered categorization
+notepad-cleanup organize --last            # AI categorization (duplicates become symlinks)
+notepad-cleanup links separate --last      # Optional: split out linked files to see only new content
 ```
 
 ## Features
@@ -33,7 +34,8 @@ notepad-cleanup organize --last            # AI-powered categorization
 - **Two-phase extraction** -- Silent `WM_GETTEXT` for loaded tabs, UI Automation for unloaded tabs
 - **Cross-session deduplication** -- Compare against historical sessions with exact and [fuzzy matching](docs/fuzzy-matching.md)
 - **Filesystem linking** -- Replace duplicates with hardlinks, symlinks, or DazzleLink descriptors
-- **AI organization** -- Claude Code CLI categorizes and renames files automatically
+- **Link-aware organization** -- AI categorizes all files, but duplicates become symlinks in `organized/` instead of copies. Preserves the connection network back to canonical sources
+- **Separate/join links** -- Split `organized/` into new files vs linked duplicates, or rejoin them
 - **Configuration system** -- Unified folder registry with [`...` notation](docs/config.md), MRU history, persistent settings
 - **Diff integration** -- Auto-generated scripts for Beyond Compare, WinMerge, VS Code, etc.
 
@@ -54,7 +56,9 @@ notepad-cleanup extract                    # 1. Extract all tabs
 notepad-cleanup compare --last             # 2. Find duplicates
 notepad-cleanup diff --last                # 3. Spot-check in diff tool
 notepad-cleanup compare --last --link auto # 4. Link duplicates
-notepad-cleanup organize --last            # 5. AI categorization
+notepad-cleanup organize --last            # 5. AI categorization (dupes become symlinks)
+notepad-cleanup links separate --last      # 6. Optional: see only new files
+notepad-cleanup links join --last          # 7. Optional: rejoin everything
 ```
 
 After setup, `--last` auto-uses the most recent extraction. No path copy-pasting.
@@ -65,7 +69,8 @@ After setup, `--last` auto-uses the most recent extraction. No path copy-pasting
 |---------|---------|
 | `extract` | Extract text from all open Notepad windows/tabs |
 | `compare` | Find duplicates across historical sessions |
-| `organize` | AI-powered file categorization via Claude Code CLI |
+| `organize` | AI-powered categorization (symlinks for duplicates, copies for new) |
+| `links` | Separate linked files from organized/, or rejoin them |
 | `diff` | Launch diff script to spot-check matched pairs |
 | `config` | Manage folders, search dirs, diff tool, settings |
 | `run` | Extract + organize in one step |

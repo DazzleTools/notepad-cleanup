@@ -21,13 +21,13 @@ Version levels:
 # Version components - edit these for version bumps
 MAJOR = 0
 MINOR = 2
-PATCH = 2
+PATCH = 3
 PHASE = None  # Per-MINOR feature set: None, "alpha", "beta", "rc1", etc.
 PRE_RELEASE_NUM = 0  # PEP 440 pre-release number (e.g., a1, b2)
 PROJECT_PHASE = "prealpha"  # Project-wide: "prealpha", "alpha", "beta", "stable"
 
 # Auto-updated by git hooks - do not edit manually
-__version__ = "0.2.2_main_14-20260316-2ecc05d1"
+__version__ = "0.2.3_main_16-20260317-af4f15c0"
 __app_name__ = "notepad-cleanup"
 
 

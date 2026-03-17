@@ -2,6 +2,34 @@
 
 All notable changes to notepad-cleanup will be documented in this file.
 
+## [0.2.3] - 2026-03-16
+
+### Added
+- **Link-aware organize**: `organize` now creates symlinks in `organized/` for
+  dedup-linked files instead of copying data. Preserves the connection network
+  so linked files point back to their canonical provenance root. Fallback chain:
+  symlink -> hardlink -> dazzlelink -> copy
+- **`links` command** with `separate` and `join` actions:
+  - `links separate --last`: moves symlinked files from `organized/` into
+    `organized-links/` preserving category structure. Shows only new files
+  - `links join --last`: moves them back, restoring the full collection
+  - Both support `--dry-run` and `--dir-name` for custom directory names
+- **Organized link manifest** (`organized/_organized_links.json`): tracks which
+  files in `organized/` are symlinks vs copies for reliable detection
+- **Previous session reference** in AI prompt: when linked files exist, Claude
+  receives a reference section with category names from previous sessions for
+  naming consistency
+- `load_link_manifest()` and `get_linked_paths()` in dedup.py as shared data
+  layer for link-aware operations
+
+### Changed
+- `execute_plan()` now accepts `linked_paths` parameter; checks each file
+  against the dedup link manifest before deciding to copy or symlink
+- `generate_prompt()` now accepts `linked_paths` for reference section
+- Organize summary shows separate counts for copied vs linked files
+- Prompt template (`organize.md`) gains `{skip_section}` and
+  `{reference_section}` template variables
+
 ## [0.2.2] - 2026-03-16
 
 ### Added

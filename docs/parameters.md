@@ -94,6 +94,8 @@ notepad-cleanup compare --last --show-threshold        # Show threshold curve
 
 Organize extracted files into named categories using AI.
 
+If `compare --link` was run first, linked files become symlinks in `organized/` pointing to their canonical provenance root instead of being copied. Claude still sees and categorizes all files for a consistent naming scheme, but duplicates don't consume disk space.
+
 ```bash
 notepad-cleanup organize [OPTIONS] [FOLDER]
 ```
@@ -131,6 +133,39 @@ After `compare` runs, it generates `_compare_diffs.cmd` (Windows) or `_compare_d
 
 ```bash
 notepad-cleanup diff --last
+```
+
+## links
+
+Separate or rejoin linked files in organized/.
+
+```bash
+notepad-cleanup links {separate|join} [OPTIONS] [FOLDER]
+```
+
+| Action | Description |
+|--------|-------------|
+| `separate` | Move linked files from organized/ into a parallel tree |
+| `join` | Move linked files back from the parallel tree into organized/ |
+
+| Option | Description |
+|--------|-------------|
+| `FOLDER` | Path to extraction folder (supports `...` notation) |
+| `--last` | Use the most recent extraction |
+| `--dir-name` | Name for the links directory (default: organized-links) |
+| `--dry-run` | Preview without moving files |
+
+After `organize` runs, linked files (duplicates from previous sessions) appear as symlinks in `organized/`. Use `separate` to move them into their own tree so you can see only genuinely new content. Use `join` to put them back.
+
+Both operations preserve relative directory structure. You can rename categories in either tree before rejoining.
+
+**Examples:**
+```bash
+notepad-cleanup links separate --last              # Split out linked files
+notepad-cleanup links separate --last --dry-run    # Preview the split
+notepad-cleanup links join --last                  # Rejoin linked files
+notepad-cleanup links join --last --dry-run        # Preview the rejoin
+notepad-cleanup links separate --last --dir-name linked-archive
 ```
 
 ## config

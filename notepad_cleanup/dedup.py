@@ -1062,24 +1062,59 @@ def _create_single_link(match: DedupMatch, strategy: str, backup: bool) -> LinkR
 def _create_dazzlelink_file(link_path: Path, target_path: Path):
     """Create a .dazzlelink JSON descriptor file.
 
-    This is a lightweight cross-platform alternative when native symlinks
-    aren't available. The file is a JSON descriptor that tools can follow.
+    This is a cross-platform alternative when native symlinks aren't
+    available. The file is a JSON descriptor compatible with the DazzleLink
+    tool (https://github.com/DazzleTools/dazzlelink). Default mode is "open"
+    so double-clicking opens the target in its native application.
     """
     from datetime import datetime
+    import time
+
+    resolved_target = target_path.resolve()
+    now = datetime.now()
+    now_ts = time.time()
+
+    # Get target file info
+    target_exists = resolved_target.exists()
+    target_size = 0
+    target_ext = resolved_target.suffix
+    target_timestamps = {}
+    if target_exists:
+        try:
+            stat = resolved_target.stat()
+            target_size = stat.st_size
+            target_timestamps = {
+                "created": stat.st_ctime,
+                "modified": stat.st_mtime,
+                "accessed": stat.st_atime,
+                "created_iso": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                "modified_iso": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                "accessed_iso": datetime.fromtimestamp(stat.st_atime).isoformat(),
+            }
+        except OSError:
+            pass
 
     dazzlelink_data = {
         "schema_version": 1,
-        "created_by": "notepad-cleanup dedup",
-        "creation_date": datetime.now().isoformat(),
+        "created_by": "notepad-cleanup",
+        "creation_timestamp": now_ts,
+        "creation_date": now.isoformat(),
         "link": {
             "original_path": str(link_path),
-            "target_path": str(target_path.resolve()),
+            "target_path": str(resolved_target),
             "type": "dazzlelink",
             "relative_path": False,
         },
         "target": {
-            "exists": target_path.exists(),
-            "size": target_path.stat().st_size if target_path.exists() else 0,
+            "exists": target_exists,
+            "type": "file",
+            "size": target_size,
+            "extension": target_ext,
+            "timestamps": target_timestamps,
+        },
+        "config": {
+            "default_mode": "open",
+            "platform": _os.name,
         },
         "context": {
             "reason": "dedup_exact_match",
@@ -1125,6 +1160,45 @@ def write_link_manifest(results: list, output_dir: Path):
         encoding="utf-8",
     )
     return manifest_path
+
+
+LINK_MANIFEST_FILENAME = "_dedup_links.json"
+
+
+def load_link_manifest(session_dir: Path) -> dict:
+    """Load the dedup link manifest from a session directory.
+
+    Returns the parsed manifest dict, or an empty structure if no manifest exists.
+    The returned dict always has a "links" key (list of link entries).
+    """
+    manifest_path = Path(session_dir) / LINK_MANIFEST_FILENAME
+    if not manifest_path.exists():
+        return {"links": []}
+    try:
+        data = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if "links" not in data:
+            data["links"] = []
+        return data
+    except (json.JSONDecodeError, OSError):
+        return {"links": []}
+
+
+def get_linked_paths(session_dir: Path) -> dict:
+    """Return a mapping of linked new_path -> canonical_path for successful links.
+
+    Keys are resolved Path objects (the window*/tab*.txt files that were linked).
+    Values are resolved Path objects pointing to the canonical (provenance root) file.
+    Returns empty dict if no manifest or no successful links.
+    """
+    manifest = load_link_manifest(session_dir)
+    linked = {}
+    for entry in manifest.get("links", []):
+        if not entry.get("success"):
+            continue
+        new_path = Path(entry["new_path"]).resolve()
+        canonical_path = Path(entry["canonical_path"]).resolve()
+        linked[new_path] = canonical_path
+    return linked
 
 
 # --- Diff tools ---

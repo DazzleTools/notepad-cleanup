@@ -5,7 +5,8 @@ You are organizing a collection of text files extracted from Windows Notepad tab
 These files were automatically extracted from {window_count} Notepad windows containing {tab_count} tabs ({total_chars} total characters). The files are in the current working directory.
 
 Each `windowNN/` folder corresponds to one Notepad window. Each `tabNN.txt` is one tab's content. The `manifest.json` contains metadata about every file including content type hints and tab labels.
-
+{skip_section}
+{reference_section}
 ## Your Task
 
 1. Read `manifest.json` to understand the full collection

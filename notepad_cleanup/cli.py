@@ -13,13 +13,15 @@ from .discovery import find_notepad_windows, get_richedit_children, get_tab_coun
 from .extractor import extract_phase1, extract_phase2, merge_results
 from .saver import save_extraction
 from .organizer import (generate_prompt, invoke_claude_cli, save_prompt_to_file,
-                         find_claude_cli, parse_plan, execute_plan)
+                         find_claude_cli, parse_plan, execute_plan,
+                         separate_links, join_links)
 from .dedup import (find_session_dirs, build_hash_index, find_duplicates,
                     find_content_files,
                     generate_unified_diff, near_match_threshold,
                     resolve_diff_tool, launch_diff_tool, create_links,
                     write_link_manifest, generate_diff_script,
                     save_compare_results, load_compare_results,
+                    get_linked_paths,
                     LINK_STRATEGIES, CACHE_FILENAME)
 from .config import (
     load_config, save_config, config_get, config_set, config_unset,
@@ -546,8 +548,14 @@ def organize(folder, last, backend, dry_run, verbose):
 
     console.print("\n[bold]Notepad Cleanup -- Organize[/bold]\n")
 
-    # Generate prompt
-    prompt = generate_prompt(manifest_path)
+    # Load dedup context if available (for link-aware organize)
+    linked_paths = get_linked_paths(folder)
+    if linked_paths:
+        console.print(f"  [dim]Found {len(linked_paths)} dedup-linked files "
+                      f"(will symlink, not copy)[/dim]")
+
+    # Generate prompt (linked files excluded from AI task)
+    prompt = generate_prompt(manifest_path, linked_paths=linked_paths)
 
     if backend == "prompt-only" or dry_run:
         prompt_file = save_prompt_to_file(prompt, folder)
@@ -606,12 +614,14 @@ def organize(folder, last, backend, dry_run, verbose):
 
     console.print(f"  Claude proposed a plan for [bold]{len(plan)}[/bold] files\n")
 
-    # Step 3: Execute the plan locally
+    # Step 3: Execute the plan locally (link-aware)
     with console.status("Organizing files..."):
-        summary, stats = execute_plan(plan, folder)
+        summary, stats = execute_plan(plan, folder, linked_paths=linked_paths)
 
     console.print("[bold green]Organization complete![/bold green]\n")
-    console.print(f"  Files organized:  {stats['copied']}")
+    console.print(f"  Files copied:     {stats['copied']}")
+    if stats.get('linked', 0):
+        console.print(f"  Files linked:     {stats['linked']} (symlink/hardlink to canonical)")
     if stats['errors']:
         console.print(f"  [red]Errors:         {stats['errors']}[/red]")
 
@@ -1009,6 +1019,89 @@ def diff_cmd(folder, last):
     except OSError as e:
         console.print(f"  [red]Failed to launch: {e}[/red]")
         console.print(f"  You can run it manually: {script_path}\n")
+
+
+@main.command("links")
+@click.argument("action", type=click.Choice(["separate", "join"]))
+@click.argument("folder", type=click.Path(), required=False, default=None)
+@click.option("--last", is_flag=True, help="Use the most recent extraction")
+@click.option("--dir-name", default="organized-links",
+              help="Name for the links directory (default: organized-links)")
+@click.option("--dry-run", is_flag=True, help="Preview without moving files")
+def links_cmd(action, folder, last, dir_name, dry_run):
+    """Separate or rejoin linked files in organized/.
+
+    \b
+    separate: Move linked files from organized/ into a parallel tree,
+              preserving category structure. Shows only new files in organized/.
+    join:     Move linked files back from the parallel tree into organized/,
+              restoring the full collection.
+
+    \b
+    Examples:
+      notepad-cleanup links separate --last              Split links out
+      notepad-cleanup links separate --last --dry-run    Preview the split
+      notepad-cleanup links join --last                  Rejoin links
+      notepad-cleanup links join --last --dry-run        Preview the rejoin
+    """
+
+    folder = resolve_folder(folder, use_last=last)
+    if folder is None:
+        console.print("[red]No extraction folder specified.[/red]")
+        console.print("  Provide a FOLDER argument or use --last.")
+        return
+    folder = Path(folder)
+    if not folder.exists():
+        console.print(f"[red]Folder does not exist: {folder}[/red]")
+        return
+
+    if last:
+        console.print(f"\n  [dim]Using last extraction: {folder}[/dim]")
+
+    organized_dir = folder / "organized"
+    links_dir = folder / dir_name
+
+    if action == "separate":
+        if not organized_dir.exists():
+            console.print(f"\n  [yellow]No organized/ folder found in {folder}[/yellow]")
+            console.print("  Run 'notepad-cleanup organize' first.\n")
+            return
+
+        label = "Separate Links -- Dry Run" if dry_run else "Separate Links"
+        console.print(f"\n[bold]{label}[/bold]\n")
+        console.print(f"  From: {organized_dir}")
+        console.print(f"  To:   {links_dir}\n")
+
+        stats, details = separate_links(organized_dir, links_dir_name=dir_name, dry_run=dry_run)
+
+        console.print(f"  Links moved:    {stats['moved']}")
+        console.print(f"  Real files:     {stats['real_kept']}")
+        if stats['errors']:
+            console.print(f"  [red]Errors:       {stats['errors']}[/red]")
+
+    elif action == "join":
+        if not links_dir.exists():
+            console.print(f"\n  [yellow]No {dir_name}/ folder found in {folder}[/yellow]")
+            console.print("  Run 'notepad-cleanup links separate' first.\n")
+            return
+
+        label = "Join Links -- Dry Run" if dry_run else "Join Links"
+        console.print(f"\n[bold]{label}[/bold]\n")
+        console.print(f"  From: {links_dir}")
+        console.print(f"  To:   {organized_dir}\n")
+
+        stats, details = join_links(organized_dir, links_dir_name=dir_name, dry_run=dry_run)
+
+        console.print(f"  Links restored: {stats['moved']}")
+        if stats['errors']:
+            console.print(f"  [red]Errors:       {stats['errors']}[/red]")
+
+    if details:
+        console.print()
+        for d in details:
+            console.print(d)
+
+    console.print()
 
 
 @main.command()

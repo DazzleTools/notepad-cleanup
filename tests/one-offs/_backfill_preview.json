@@ -1,0 +1,105 @@
+{
+  "totalClones": 0,
+  "totalUniqueClones": 32,
+  "totalDownloads": 0,
+  "totalViews": 0,
+  "totalUniqueViews": 2,
+  "totalCiCheckouts": 4,
+  "totalCiUniqueClones": 0,
+  "totalOrganicUniqueClones": 0,
+  "previousTotalDownloads": 0,
+  "_previousCiUniqueToday": 0,
+  "stars": 0,
+  "forks": 0,
+  "openIssues": 8,
+  "lastSeenDates": [],
+  "lastSeenViewDates": [],
+  "dailyHistory": [
+    {
+      "date": "2026-03-16T00:00:00Z",
+      "capturedAt": "2026-03-16T12:19:58.131Z",
+      "clones": 0,
+      "downloads": 0,
+      "views": 0,
+      "total": 0,
+      "ciCheckouts": 4,
+      "organicClones": 0,
+      "stars": 0,
+      "forks": 0,
+      "openIssues": 8,
+      "uniqueClones": 0,
+      "uniqueViews": 0,
+      "ciRuns": 3,
+      "organicUniqueClones": 0
+    }
+  ],
+  "ciCheckouts": {
+    "2026-03-16": {
+      "total": 4,
+      "runs": 3,
+      "byWorkflow": {
+        "Track Downloads & Clones": {
+          "runs": 1,
+          "checkoutsPerRun": [
+            0
+          ]
+        },
+        "CI": {
+          "runs": 2,
+          "checkoutsPerRun": [
+            1,
+            2
+          ]
+        },
+        "Create Issue from Draft": {
+          "runs": 1,
+          "checkoutsPerRun": [
+            1
+          ]
+        }
+      }
+    }
+  },
+  "referrers": [],
+  "popularPaths": [
+    {
+      "path": "/DazzleTools/notepad-cleanup",
+      "title": "GitHub - DazzleTools/notepad-cleanup: Extract and organize text from Windows ...",
+      "count": 2,
+      "uniques": 2
+    },
+    {
+      "path": "/DazzleTools/notepad-cleanup/actions",
+      "title": "Workflow runs \u00c2\u00b7 DazzleTools/notepad-cleanup \u00c2\u00b7 GitHub",
+      "count": 1,
+      "uniques": 1
+    },
+    {
+      "path": "/DazzleTools/notepad-cleanup/actions/runs/22593310891",
+      "title": "Running Copilot coding agent \u00c2\u00b7 DazzleTools/notepad-cleanup@023b004 \u00c2\u00b7 GitHub",
+      "count": 1,
+      "uniques": 1
+    },
+    {
+      "path": "/DazzleTools/notepad-cleanup/actions/runs/22593310891/job/65456684146",
+      "title": "Running Copilot coding agent \u00c2\u00b7 DazzleTools/notepad-cleanup@023b004 \u00c2\u00b7 GitHub",
+      "count": 1,
+      "uniques": 1
+    },
+    {
+      "path": "/DazzleTools/notepad-cleanup/actions/runs/22593311562",
+      "title": "[WIP] Create GitHub issue for AI CLI tools support \u00c2\u00b7 DazzleTools/notepad-clea...",
+      "count": 1,
+      "uniques": 1
+    }
+  ],
+  "lastSeenCloneCounts": {},
+  "lastSeenViewCounts": {},
+  "totalOrganicClones": 0,
+  "schemaVersion": 3,
+  "_lastSeenUniqueClones": {},
+  "_lastSeenUniqueViews": {},
+  "repoCreatedAt": "2026-02-14T14:50:32Z",
+  "trackingSince": "2026-03-16T12:19:57.800Z",
+  "_previousOrganicToday": 0
+}
