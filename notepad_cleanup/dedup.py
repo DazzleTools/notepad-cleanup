@@ -29,6 +29,11 @@ from .config import (
 
 # --- Configuration defaults ---
 
+DEFAULT_SESSION_PATTERNS = [
+    "notepad-cleanup-*",    # Old format (v0.1.x - v0.2.1)
+    "nc-*",                  # New format (v0.2.2+)
+]
+# Kept for backward compat (external callers)
 DEFAULT_SESSION_PATTERN = "notepad-cleanup-*"
 CACHE_FILENAME = ".notepad-cleanup-dedup-cache.json"
 FUZZY_BIG_FILE_THRESHOLD = 50_000  # 50KB -- files larger than this skip fuzzy by default
@@ -136,7 +141,11 @@ def _hash_file_binary(file_path: Path) -> str:
 # --- Session discovery ---
 
 def find_session_dirs(search_dirs: list, current_dir: Path = None) -> list:
-    """Find all notepad-cleanup-* session directories.
+    """Find all notepad-cleanup session directories.
+
+    Matches both legacy format (notepad-cleanup-*) and new format (nc-*).
+    Each candidate is validated by checking for manifest.json to reject
+    false positives like nc-backups, nc-scratch, etc.
 
     Args:
         search_dirs: Directories to search for session folders
@@ -152,16 +161,21 @@ def find_session_dirs(search_dirs: list, current_dir: Path = None) -> list:
         search_dir = Path(search_dir)
         if not search_dir.is_dir():
             continue
-        for d in search_dir.glob(DEFAULT_SESSION_PATTERN):
-            if not d.is_dir():
-                continue
-            resolved = d.resolve()
-            if resolved in seen:
-                continue
-            if current_dir and resolved == Path(current_dir).resolve():
-                continue
-            seen.add(resolved)
-            sessions.append(d)
+        for pattern in DEFAULT_SESSION_PATTERNS:
+            for d in search_dir.glob(pattern):
+                if not d.is_dir():
+                    continue
+                # Validate: must have a manifest.json to be a real session.
+                # Rejects false positives like nc-backups, nc-scratch, etc.
+                if not (d / "manifest.json").is_file():
+                    continue
+                resolved = d.resolve()
+                if resolved in seen:
+                    continue
+                if current_dir and resolved == Path(current_dir).resolve():
+                    continue
+                seen.add(resolved)
+                sessions.append(d)
 
     # Sort newest first (the timestamp is in the folder name)
     sessions.sort(key=lambda p: p.name, reverse=True)
@@ -682,10 +696,13 @@ def _pick_canonical(paths: list) -> Path:
 
 
 def _get_session_dir(file_path: Path) -> Path:
-    """Walk up from file to find the notepad-cleanup-* session directory."""
+    """Walk up from file to find the session directory.
+
+    Matches both old format (notepad-cleanup-YYYY...) and new format (nc-YYYY...).
+    """
     p = file_path
     while p.parent != p:
-        if re.match(r"notepad-cleanup-\d{4}", p.name):
+        if re.match(r"(notepad-cleanup-|nc-)\d{4}", p.name):
             return p
         p = p.parent
     return file_path.parent

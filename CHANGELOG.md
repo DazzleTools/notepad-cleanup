@@ -2,6 +2,31 @@
 
 All notable changes to notepad-cleanup will be documented in this file.
 
+## [0.2.4] - 2026-04-10
+
+### Fixed
+- **`compare` now finds new-format `nc-*` session folders** (#14). Since v0.2.2,
+  `extract` saves sessions using the `nc-YYYY-MM-DD__hh-mm-ss` naming format,
+  but session discovery still only matched the legacy `notepad-cleanup-*` pattern.
+  As a result, any `nc-*` folders in search directories were silently skipped
+  during compare, leading to missed duplicates
+- `find_session_dirs()` now iterates both patterns (`notepad-cleanup-*` and `nc-*`)
+  and validates each candidate by checking for `manifest.json`. This rejects false
+  positives like `nc-backups`, `nc-scratch`, or any folder starting with `nc-`
+  that isn't a real extraction
+- `_get_session_dir()` helper now matches both formats when walking up from a file
+
+### Changed
+- `DEFAULT_SESSION_PATTERN` (single) is now `DEFAULT_SESSION_PATTERNS` (list).
+  The singular constant is kept for backward compatibility
+- Test helper `make_session()` now creates a `manifest.json` marker so test
+  fixtures match the validation logic
+
+### Tests
+- `test_find_sessions_both_formats`: verifies both old and new formats discovered
+- `test_find_sessions_rejects_false_positives`: verifies `nc-backups` and similar
+  folders without `manifest.json` are not treated as sessions
+
 ## [0.2.3] - 2026-03-16
 
 ### Added

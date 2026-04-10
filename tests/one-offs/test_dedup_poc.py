@@ -28,12 +28,24 @@ from notepad_cleanup.dedup import (
 
 
 def make_session(base_dir: Path, name: str, files: dict) -> Path:
-    """Create a fake session directory with given files."""
+    """Create a fake session directory with given files and a manifest.json."""
     session = base_dir / name
     win_dir = session / "window01"
     win_dir.mkdir(parents=True)
     for fname, content in files.items():
         (win_dir / fname).write_text(content, encoding="utf-8")
+    # Write a minimal manifest.json (required by session discovery)
+    import json as _json
+    (session / "manifest.json").write_text(
+        _json.dumps({
+            "version": "1.0",
+            "windows": [],
+            "window_count": 0,
+            "tab_count": len(files),
+            "total_chars": sum(len(c) for c in files.values()),
+        }),
+        encoding="utf-8",
+    )
     return session
 
 
@@ -233,6 +245,52 @@ def test_multi_session():
         print(f"[OK] multi-session: {result.stats}")
 
 
+def test_find_sessions_both_formats():
+    """find_session_dirs matches both old and new naming formats."""
+    with tempfile.TemporaryDirectory(prefix="dedup_test_") as tmpdir:
+        base = Path(tmpdir)
+
+        # Create sessions with both name formats
+        old1 = make_session(base, "notepad-cleanup-2026-01-01_00-00-00", {"tab01.txt": "old1\n"})
+        old2 = make_session(base, "notepad-cleanup-2026-02-14", {"tab01.txt": "old2\n"})
+        new1 = make_session(base, "nc-2026-03-22__14-09-18", {"tab01.txt": "new1\n"})
+        new2 = make_session(base, "nc-2026-03-22__14-10-08", {"tab01.txt": "new2\n"})
+
+        sessions = find_session_dirs([base])
+        names = {s.name for s in sessions}
+        assert "notepad-cleanup-2026-01-01_00-00-00" in names, f"Missing old format 1: {names}"
+        assert "notepad-cleanup-2026-02-14" in names, f"Missing old format 2: {names}"
+        assert "nc-2026-03-22__14-09-18" in names, f"Missing new format 1: {names}"
+        assert "nc-2026-03-22__14-10-08" in names, f"Missing new format 2: {names}"
+        assert len(sessions) == 4, f"Expected 4 sessions, got {len(sessions)}"
+        print(f"[OK] find_sessions_both_formats: {len(sessions)} sessions")
+
+
+def test_find_sessions_rejects_false_positives():
+    """nc-* folders without manifest.json are NOT treated as sessions."""
+    with tempfile.TemporaryDirectory(prefix="dedup_test_") as tmpdir:
+        base = Path(tmpdir)
+
+        # Real session with manifest
+        real = make_session(base, "nc-2026-03-22__14-09-18", {"tab01.txt": "real\n"})
+
+        # False positive folders (start with nc- but no manifest)
+        (base / "nc-backups").mkdir()
+        (base / "nc-backups" / "random.txt").write_text("backup data\n", encoding="utf-8")
+        (base / "nc-scratch").mkdir()
+        (base / "nc-old-stuff").mkdir()
+
+        sessions = find_session_dirs([base])
+        names = {s.name for s in sessions}
+
+        assert "nc-2026-03-22__14-09-18" in names, f"Real session missing: {names}"
+        assert "nc-backups" not in names, f"False positive accepted: {names}"
+        assert "nc-scratch" not in names, f"False positive accepted: {names}"
+        assert "nc-old-stuff" not in names, f"False positive accepted: {names}"
+        assert len(sessions) == 1, f"Expected 1 session, got {len(sessions)}"
+        print(f"[OK] find_sessions_rejects_false_positives: {len(sessions)} session")
+
+
 def test_cache():
     """Hash cache speeds up repeat scans."""
     with tempfile.TemporaryDirectory(prefix="dedup_test_") as tmpdir:
@@ -404,6 +462,8 @@ if __name__ == "__main__":
     test_empty_skipped()
     test_diff_output()
     test_multi_session()
+    test_find_sessions_both_formats()
+    test_find_sessions_rejects_false_positives()
     test_cache()
     test_tiny_file_rejects_large_diff()
     test_create_links_hardlink()
