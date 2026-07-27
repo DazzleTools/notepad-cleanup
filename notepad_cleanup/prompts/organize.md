@@ -39,6 +39,8 @@ Return ONLY a JSON array. No markdown fencing, no explanation, just raw JSON:
 ## Rules for naming and categorizing
 
 - Every file MUST get its own `new_name` — never set it to null
+- **Every `category` + `new_name` pair MUST be unique across the whole plan.** Two files may share a category, and the same filename may appear in *different* categories, but no two entries may target the same `category/new_name`. If two files are genuinely similar, distinguish them by content (`grocery-list-june.txt` and `grocery-list-hardware-store.txt`), not by a numeric suffix
+- If you cannot tell two files apart well enough to name them distinctly, still give them different names — a duplicated name means one file would overwrite the other
 - Each tab is preserved as an individual file, even short notes
 - Use lowercase-with-dashes for folder and file names
 - Keep `.txt` for plain text and general notes

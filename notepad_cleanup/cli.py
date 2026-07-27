@@ -13,7 +13,7 @@ from .discovery import find_notepad_windows, get_richedit_children, get_tab_coun
 from .extractor import extract_phase1, extract_phase2, merge_results
 from .saver import save_extraction
 from .organizer import (generate_prompt, invoke_claude_cli, save_prompt_to_file,
-                         find_claude_cli, parse_plan, execute_plan,
+                         find_claude_cli, parse_plan, execute_plan, validate_plan,
                          separate_links, join_links)
 from .dedup import (find_session_dirs, build_hash_index, find_duplicates,
                     find_content_files,
@@ -614,6 +614,23 @@ def organize(folder, last, backend, dry_run, verbose):
 
     console.print(f"  Claude proposed a plan for [bold]{len(plan)}[/bold] files\n")
 
+    # Step 2b: Validate the plan before touching the filesystem. Duplicate or
+    # missing sources mean content would be mis-filed or left unorganized --
+    # which matters most because later steps may delete the origin.
+    problems = validate_plan(plan, folder)
+    if problems:
+        fatal = [p for p in problems if "auto-renamed" not in p]
+        for p in problems:
+            style = "yellow" if "auto-renamed" in p else "red"
+            console.print(f"  [{style}]plan issue:[/{style}] {p}")
+        console.print("")
+        if fatal:
+            console.print(
+                "[red]Refusing to organize: the plan has problems that would "
+                "lose or mis-file content.[/red]")
+            console.print(f"  Raw output saved to: {log_file}\n")
+            return
+
     # Step 3: Execute the plan locally (link-aware)
     with console.status("Organizing files..."):
         summary, stats = execute_plan(plan, folder, linked_paths=linked_paths)
@@ -622,6 +639,9 @@ def organize(folder, last, backend, dry_run, verbose):
     console.print(f"  Files copied:     {stats['copied']}")
     if stats.get('linked', 0):
         console.print(f"  Files linked:     {stats['linked']} (symlink/hardlink to canonical)")
+    if stats.get('renamed', 0):
+        console.print(f"  [yellow]Renamed:          {stats['renamed']} "
+                      f"(name collisions -- see _summary.md)[/yellow]")
     if stats['errors']:
         console.print(f"  [red]Errors:         {stats['errors']}[/red]")
 

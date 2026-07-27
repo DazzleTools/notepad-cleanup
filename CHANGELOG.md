@@ -2,6 +2,52 @@
 
 All notable changes to notepad-cleanup will be documented in this file.
 
+## [0.2.5] - 2026-07-26
+
+### Fixed
+- **`organize` no longer silently overwrites files when two get the same name.**
+  `execute_plan()` computed the destination path with no existence check and used
+  `shutil.copy2()`, which overwrites. When the AI plan assigned the same
+  `category` + `new_name` to two different files, only one survived on disk --
+  while `stats["copied"]` counted both and `_summary.md` reported both as
+  organized successfully. Silent data loss with a success report
+- Colliding destinations are now de-collided (`name.txt` -> `name-2.txt`), keeping
+  every file, and each rename is reported in three places: the summary counts, a
+  dedicated "Renamed to avoid collisions" section, and the per-file mapping.
+  Policy is auto-rename and report -- never silent, and never abort a whole run
+  over a name clash, because the invariant that matters is *no file is lost*
+- Collision tracking is scoped to a single run, so re-running `organize` still
+  overwrites its own previous output rather than accumulating `-2`, `-3` copies
+
+### Added
+- `validate_plan(plan, base_dir, expected_sources=None)` -- checks a plan before
+  any file is touched: sources must exist, no source may appear twice, every
+  expected source must be present, and duplicate destinations are flagged.
+  `organize` now refuses to run when a plan would lose or mis-file content
+- `stats["renamed"]` counts collision renames, surfaced in the CLI output
+- Uniqueness rules in `prompts/organize.md`: every `category` + `new_name` pair
+  must be unique, and similar files must be distinguished by content rather than
+  by numeric suffix. The prompt previously had no uniqueness requirement at all
+
+### Tests
+- `tests/test_organize_collisions.py` -- first automated regression suite in
+  `tests/` (previously only `tests/one-offs/` POC scripts existed):
+  - `test_colliding_names_do_not_lose_content`: reproduces the defect; two
+    entries sharing a destination must yield two files with both contents
+  - `test_collision_rename_is_reported`: renames must appear in the summary
+  - `test_collision_across_categories_is_not_a_collision`: same filename in
+    different categories is legitimate and must not be renamed
+  - `test_extension_preserved_when_de_colliding`: `script.py` -> `script-2.py`
+  - `test_many_collisions_all_survive`: 12-way collision keeps all 12 files
+  - `test_case_only_difference_collides_on_windows`: `Notes.txt` vs `notes.txt`
+    collide on a case-insensitive filesystem; both must survive
+  - `test_rerun_does_not_accumulate_duplicates`: idempotency guard -- a second
+    `organize` run must overwrite its own output, not create `-2` copies
+  - `test_rename_counter_is_reported_in_stats`: `stats['renamed']` is accurate
+  - `test_validate_plan_*`: duplicate, missing, and nonexistent sources
+  - no-regression guards on the ordinary non-colliding path
+  - suite total: 14 new tests; **50 passed** overall (was 36)
+
 ## [0.2.4] - 2026-04-10
 
 ### Fixed

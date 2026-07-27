@@ -304,6 +304,108 @@ def _write_organized_link_manifest(entries, organized_dir):
     )
 
 
+def _resolve_unique_dest(cat_dir, new_name, used):
+    """Pick a destination path that no other entry in THIS run has claimed.
+
+    Two plan entries can legitimately propose the same `new_name` -- an AI
+    backend batching files has no global view, and even a single-shot backend
+    may name two different grocery lists "grocery-list.txt". Copying both to
+    the same path silently destroys the first one, so we de-collide instead.
+
+    Scope note: collisions are tracked only WITHIN a run (via `used`), never
+    against files already on disk. Checking the filesystem would break
+    idempotency -- re-running organize would produce name-2, name-3, ... on
+    every pass instead of overwriting its own previous output.
+
+    Returns: (dest_path, final_name, original_name_if_renamed)
+    """
+    stem = Path(new_name).stem
+    suffix = Path(new_name).suffix
+
+    candidate = new_name
+    n = 1
+    while True:
+        dest = cat_dir / candidate
+        key = str(dest).lower()          # Windows paths are case-insensitive
+        if key not in used:
+            used.add(key)
+            return dest, candidate, (new_name if candidate != new_name else None)
+        n += 1
+        candidate = f"{stem}-{n}{suffix}"
+
+
+def validate_plan(plan, base_dir, expected_sources=None):
+    """Check a plan for defects that would lose or mis-file content.
+
+    Run this BEFORE execute_plan and refuse to proceed on any problem. A file
+    missing from the plan is a file left unorganized, and a plan referencing a
+    source that doesn't exist means the AI backend invented a filename -- both
+    are worth catching before anything touches the filesystem.
+
+    Checks:
+      - every `source` exists on disk
+      - no `source` appears more than once
+      - every expected source is present (when `expected_sources` is given)
+      - duplicate category/new_name pairs are reported (informational -- these
+        are auto-renamed by execute_plan, not fatal)
+
+    Args:
+        plan: list of plan entry dicts
+        base_dir: extraction directory the sources are relative to
+        expected_sources: optional iterable of relpaths that MUST appear
+
+    Returns: list of human-readable problem strings ([] when the plan is clean)
+    """
+    base_dir = Path(base_dir)
+    problems = []
+
+    seen_sources = {}
+    for i, entry in enumerate(plan):
+        source = (entry.get("source") or "").replace("\\", "/")
+        if not source:
+            problems.append(f"entry {i}: missing 'source'")
+            continue
+
+        seen_sources.setdefault(source, []).append(i)
+
+        if not (base_dir / source).exists():
+            problems.append(
+                f"entry {i}: source does not exist on disk: {source}"
+            )
+
+    for source, idxs in sorted(seen_sources.items()):
+        if len(idxs) > 1:
+            problems.append(
+                f"duplicate source: {source} appears {len(idxs)} times "
+                f"(entries {idxs})"
+            )
+
+    if expected_sources is not None:
+        expected = {str(s).replace("\\", "/") for s in expected_sources}
+        missing = sorted(expected - set(seen_sources))
+        for m in missing:
+            problems.append(f"missing from plan: {m}")
+
+    # Informational: execute_plan de-collides these, but a backend producing
+    # many of them signals the prompt isn't being told what names exist yet.
+    dests = {}
+    for i, entry in enumerate(plan):
+        key = (
+            (entry.get("category") or "misc"),
+            (entry.get("new_name") or ""),
+        )
+        if key[1]:
+            dests.setdefault(key, []).append(i)
+    for (cat, name), idxs in sorted(dests.items()):
+        if len(idxs) > 1:
+            problems.append(
+                f"duplicate destination (will be auto-renamed): "
+                f"{cat}/{name} claimed by entries {idxs}"
+            )
+
+    return problems
+
+
 def execute_plan(plan, base_dir, linked_paths=None):
     """
     Execute the organization plan by copying/renaming files.
@@ -324,7 +426,7 @@ def execute_plan(plan, base_dir, linked_paths=None):
     organized_dir = base_dir / "organized"
     organized_dir.mkdir(exist_ok=True)
 
-    stats = {"copied": 0, "linked": 0, "errors": 0}
+    stats = {"copied": 0, "linked": 0, "errors": 0, "renamed": 0}
     categories = {}
     details = []
     organized_links = []  # Track which files were linked vs copied
@@ -332,6 +434,11 @@ def execute_plan(plan, base_dir, linked_paths=None):
     # Cache symlink capability test (once per run, not per file)
     from .dedup import _can_create_symlink
     symlink_ok = _can_create_symlink()
+
+    # Destinations claimed during THIS run -- prevents one entry from silently
+    # overwriting another when two entries propose the same category/new_name.
+    used_dests = set()
+    renames = []
 
     for entry in plan:
         source = entry.get("source", "")
@@ -353,7 +460,16 @@ def execute_plan(plan, base_dir, linked_paths=None):
         cat_dir = organized_dir / category
         cat_dir.mkdir(exist_ok=True)
 
-        dest_path = cat_dir / new_name
+        # Claim a destination no other entry in this run is using. Renaming is
+        # always reported -- a silent rename is nearly as bad as a silent
+        # overwrite, because the summary would no longer describe the disk.
+        dest_path, new_name, renamed_from = _resolve_unique_dest(
+            cat_dir, new_name, used_dests)
+        rename_note = ""
+        if renamed_from:
+            renames.append((source, category, renamed_from, new_name))
+            stats["renamed"] += 1
+            rename_note = f" [renamed from {renamed_from} -- name collision]"
 
         # Check if this file is a dedup link
         source_resolved = source_path.resolve()
@@ -366,7 +482,8 @@ def execute_plan(plan, base_dir, linked_paths=None):
             if ok:
                 stats["linked"] += 1
                 categories.setdefault(category, []).append(new_name)
-                details.append(f"  {source} -> {category}/{new_name} [{link_type}]")
+                details.append(
+                    f"  {source} -> {category}/{new_name} [{link_type}]{rename_note}")
                 organized_links.append({
                     "rel_path": f"{category}/{new_name}",
                     "canonical": str(canonical),
@@ -378,7 +495,8 @@ def execute_plan(plan, base_dir, linked_paths=None):
                     shutil.copy2(str(source_path), str(dest_path))
                     stats["copied"] += 1
                     categories.setdefault(category, []).append(new_name)
-                    details.append(f"  {source} -> {category}/{new_name} [copy fallback]")
+                    details.append(
+                        f"  {source} -> {category}/{new_name} [copy fallback]{rename_note}")
                 except Exception as e:
                     stats["errors"] += 1
                     details.append(f"  ERROR copying {source}: {e}")
@@ -388,7 +506,7 @@ def execute_plan(plan, base_dir, linked_paths=None):
                 shutil.copy2(str(source_path), str(dest_path))
                 stats["copied"] += 1
                 categories.setdefault(category, []).append(new_name)
-                details.append(f"  {source} -> {category}/{new_name}")
+                details.append(f"  {source} -> {category}/{new_name}{rename_note}")
             except Exception as e:
                 stats["errors"] += 1
                 details.append(f"  ERROR copying {source}: {e}")
@@ -405,7 +523,18 @@ def execute_plan(plan, base_dir, linked_paths=None):
     summary_lines.append(f"- **Categories**: {len(categories)}")
     if stats["errors"]:
         summary_lines.append(f"- **Errors**: {stats['errors']}")
+    if renames:
+        summary_lines.append(f"- **Renamed (name collisions)**: {len(renames)}")
     summary_lines.append("")
+
+    if renames:
+        summary_lines.append("## Renamed to avoid collisions\n")
+        summary_lines.append(
+            "Two or more files were assigned the same name. Each was kept as a "
+            "separate file rather than overwritten:\n")
+        for source, cat, was, now in renames:
+            summary_lines.append(f"- `{source}`: `{cat}/{was}` -> `{cat}/{now}`")
+        summary_lines.append("")
 
     summary_lines.append("## Categories\n")
     for cat, files in sorted(categories.items()):
