@@ -1,0 +1,97 @@
+{
+  "mutations": [
+    {
+      "id": "M1",
+      "file": "notepad_cleanup/dedup.py",
+      "original": "    lines = [line.rstrip() for line in lines]",
+      "mutated": "    lines = [line for line in lines]",
+      "note": "Drop per-line rstrip normalization; trailing-whitespace-only differences no longer normalize away"
+    },
+    {
+      "id": "M2",
+      "file": "notepad_cleanup/dedup.py",
+      "original": "autojunk=False",
+      "mutated": "autojunk=True",
+      "note": "Re-enable SequenceMatcher autojunk heuristic, corrupting char-diff counts on texts with frequent characters"
+    },
+    {
+      "id": "M3",
+      "file": "notepad_cleanup/dedup.py",
+      "original": "return max(len(a), len(b)) - matching_chars",
+      "mutated": "return min(len(a), len(b)) - matching_chars",
+      "note": "min/max swap undercounts differences when texts have unequal lengths"
+    },
+    {
+      "id": "M4",
+      "file": "notepad_cleanup/dedup.py",
+      "original": "if file_size <= 1:",
+      "mutated": "if file_size < 1:",
+      "note": "Boundary off-by-one: size-1 file falls through to log curve (ln(1)=0 gives allowed=10) instead of returning 1"
+    },
+    {
+      "id": "M5",
+      "file": "notepad_cleanup/dedup.py",
+      "original": "for op in (\"lte\", \"gte\", \"lt\", \"gt\", \"eq\"):",
+      "mutated": "for op in (\"lt\", \"gt\", \"lte\", \"gte\", \"eq\"):",
+      "note": "Operator match ordering: 'lte'/'gte' tokens now prefix-match 'lt'/'gt' first, parsing the wrong operator and garbage size"
+    },
+    {
+      "id": "M6",
+      "file": "notepad_cleanup/dedup.py",
+      "original": "return file_len <= size_limit",
+      "mutated": "return file_len < size_limit",
+      "note": "lte boundary flip: file exactly at the size limit no longer qualifies for fuzzy matching"
+    },
+    {
+      "id": "M7",
+      "file": "notepad_cleanup/dedup.py",
+      "original": "if file_len > FUZZY_BIG_FILE_THRESHOLD and not do_big:",
+      "mutated": "if file_len > FUZZY_BIG_FILE_THRESHOLD or not do_big:",
+      "note": "and/or swap: default small-mode fuzzy matching is disabled for every file, not just big ones"
+    },
+    {
+      "id": "M8",
+      "file": "notepad_cleanup/dedup.py",
+      "original": "best_diff = allowed + 1  # Start above threshold",
+      "mutated": "best_diff = allowed  # Start above threshold",
+      "note": "Off-by-one seed: a candidate whose diff exactly equals the threshold is rejected instead of accepted"
+    },
+    {
+      "id": "M9",
+      "file": "notepad_cleanup/dedup.py",
+      "original": "if ratio > 2.0:",
+      "mutated": "if ratio >= 2.0:",
+      "note": "Size-ratio pre-filter boundary: candidates at exactly 2.0x length ratio are now excluded"
+    },
+    {
+      "id": "M10",
+      "file": "notepad_cleanup/dedup.py",
+      "original": "max_len = max(new_len, canon_len)",
+      "mutated": "max_len = min(new_len, canon_len)",
+      "note": "Threshold computed from the smaller file, violating the 'larger of the two files' heuristic and tightening acceptance"
+    },
+    {
+      "id": "M11",
+      "file": "notepad_cleanup/dedup.py",
+      "original": "ranked = sorted(paths, key=_sort_key)",
+      "mutated": "ranked = sorted(paths, key=_sort_key, reverse=True)",
+      "note": "Canonical pick inverted: chooses the NEWEST instance instead of the oldest, breaking provenance intent"
+    },
+    {
+      "id": "M12",
+      "file": "notepad_cleanup/dedup.py",
+      "original": "                canonical_hash=new_hash,\r\n            ))\r\n            continue",
+      "mutated": "                canonical_hash=new_hash,\r\n            ))",
+      "note": "Dropped continue after exact match: exact-matched files fall through into fuzzy matching and get double-counted"
+    }
+  ],
+  "test_command": [
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/one-offs/test_dedup_poc.py",
+    "tests/test_fuzzy_bounds.py",
+    "tests/test_dedup_semantics.py"
+  ]
+}

@@ -1,0 +1,83 @@
+{
+  "mutations": [
+    {
+      "id": "N1",
+      "file": "notepad_cleanup/dedup.py",
+      "original": "while lines and not lines[-1]:",
+      "mutated": "while lines and not lines[0]:",
+      "note": "Wrong list element: strips leading instead of trailing empty lines"
+    },
+    {
+      "id": "N2",
+      "file": "notepad_cleanup/dedup.py",
+      "original": "return max(1, int(round(allowed)))",
+      "mutated": "return max(1, int(allowed))",
+      "note": "Dropped rounding: truncation shifts docstring anchors"
+    },
+    {
+      "id": "N3",
+      "file": "notepad_cleanup/dedup.py",
+      "original": "if not fuzzy_str or fuzzy_str == \"none\":",
+      "mutated": "if fuzzy_str == \"none\":",
+      "note": "Removed empty-string guard: empty fuzzy_str defaults to small instead of exact-only"
+    },
+    {
+      "id": "N4",
+      "file": "notepad_cleanup/dedup.py",
+      "original": "return ({\"small\", \"big\"}, None, None)",
+      "mutated": "return ({\"small\"}, None, None)",
+      "note": "'all' mode loses 'big'"
+    },
+    {
+      "id": "N5",
+      "file": "notepad_cleanup/dedup.py",
+      "original": "size_limit = _parse_size(part[len(op):])",
+      "mutated": "size_limit = _parse_size(part[len(op) + 1:])",
+      "note": "Off-by-one slice in glued operator parsing"
+    },
+    {
+      "id": "N6",
+      "file": "notepad_cleanup/dedup.py",
+      "original": "if file_len > FUZZY_BIG_FILE_THRESHOLD and not do_big:",
+      "mutated": "if file_len >= FUZZY_BIG_FILE_THRESHOLD and not do_big:",
+      "note": "Boundary flip at exactly 50000"
+    },
+    {
+      "id": "N7",
+      "file": "notepad_cleanup/dedup.py",
+      "original": "if diff <= effective_threshold and diff < best_diff:",
+      "mutated": "if diff < effective_threshold and diff < best_diff:",
+      "note": "Boundary flip: diff exactly at threshold no longer matches"
+    },
+    {
+      "id": "N8",
+      "file": "notepad_cleanup/dedup.py",
+      "original": "canonical_path=_pick_canonical(paths),",
+      "mutated": "canonical_path=paths[0],",
+      "note": "Near-match ignores canonical selection, returns arbitrary first path"
+    },
+    {
+      "id": "N9",
+      "file": "notepad_cleanup/dedup.py",
+      "original": "\"near_count\": len(result.near_matches),",
+      "mutated": "\"near_count\": len(result.new_files),",
+      "note": "Wrong stats field"
+    },
+    {
+      "id": "N10",
+      "file": "notepad_cleanup/dedup.py",
+      "original": "return (ctime, 0 if is_organized else 1)",
+      "mutated": "return (ctime, 1 if is_organized else 0)",
+      "note": "Tie-break flip: prefers raw over organized on ctime ties"
+    }
+  ],
+  "test_command": [
+    "python",
+    "-m",
+    "pytest",
+    "-q",
+    "tests/one-offs/test_dedup_poc.py",
+    "tests/test_fuzzy_bounds.py",
+    "tests/test_dedup_semantics.py"
+  ]
+}
