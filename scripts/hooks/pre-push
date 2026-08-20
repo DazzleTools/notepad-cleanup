@@ -14,6 +14,16 @@ NC='\033[0m' # No Color
 # Change to repository root
 cd "$(git rev-parse --show-toplevel)" 2>/dev/null || true
 
+# Git delivers the refs it intends to push on stdin, one line per ref:
+#   <local_ref> <local_sha> <remote_ref> <remote_sha>
+# When everything is up to date the list is empty -- skip validation
+# instead of running the full test suite for a no-op push.
+PUSH_REFS=$(cat)
+if [ -z "$PUSH_REFS" ]; then
+    echo "Nothing to push -- skipping pre-push validation"
+    exit 0
+fi
+
 # Get current branch
 CURRENT_BRANCH=$(git branch --show-current)
 echo -e "${BLUE}🔍 Pre-push validation for branch: $CURRENT_BRANCH${NC}"

@@ -27,7 +27,7 @@ PRE_RELEASE_NUM = 0  # PEP 440 pre-release number (e.g., a1, b2)
 PROJECT_PHASE = "prealpha"  # Project-wide: "prealpha", "alpha", "beta", "stable"
 
 # Auto-updated by git hooks - do not edit manually
-__version__ = "0.2.6_main_19-20260820-d0072370"
+__version__ = "0.2.6_main_20-20260820-4c25c76a"
 __app_name__ = "notepad-cleanup"
 
 
