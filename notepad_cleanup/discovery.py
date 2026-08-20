@@ -57,7 +57,14 @@ def get_richedit_children(hwnd):
 
 
 def read_richedit_text(child_hwnd):
-    """Read full text from a RichEditD2DPT window via WM_GETTEXT."""
+    """Read full text from a RichEditD2DPT window via WM_GETTEXT.
+
+    Line endings are normalized to "\n" at this boundary -- the control
+    returns "\r\n" (and RichEdit can emit lone "\r"), but everything inside
+    the tool uses "\n". Serializing a platform-appropriate line ending is
+    the saver's job (see #17: un-normalized "\r\n" passed to a text-mode
+    write produced "\r\r\n" in every saved tab).
+    """
     text_len = ctypes.windll.user32.SendMessageW(
         child_hwnd, win32con.WM_GETTEXTLENGTH, 0, 0
     )
@@ -67,7 +74,7 @@ def read_richedit_text(child_hwnd):
     ctypes.windll.user32.SendMessageW(
         child_hwnd, win32con.WM_GETTEXT, text_len + 1, buf
     )
-    return buf.value
+    return buf.value.replace("\r\n", "\n").replace("\r", "\n")
 
 
 def get_tab_count(hwnd):

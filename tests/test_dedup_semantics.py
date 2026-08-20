@@ -275,3 +275,64 @@ def test_pick_canonical_prefers_organized_on_ctime_tie():
 
     assert str(_pick_canonical([raw, org])) == str(org)
     assert str(_pick_canonical([org, raw])) == str(org)
+
+
+# --- Perf-refactor correctness pins (2026-08-19 fuzzy perf DWP) --------------
+
+def test_near_match_session_dir_matches_canonical(tmp_path):
+    """The near-match record's session_dir must describe the SAME file as
+    canonical_path. Before the fix it came from paths[0] (arbitrary index
+    order) while canonical_path came from _pick_canonical (oldest) -- two
+    different sessions reported for one match."""
+    sess_old = tmp_path / "nc-2026-01-01__00-00-00"
+    sess_new = tmp_path / "nc-2026-02-02__00-00-00"
+    content = "abcdefghij" * 4 + "klmno"                 # 45 chars
+    old_f = sess_old / "window01" / "tab01.txt"
+    new_f = sess_new / "window01" / "tab01.txt"
+    for s, f in ((sess_old, old_f), (sess_new, new_f)):
+        f.parent.mkdir(parents=True)
+        (s / "manifest.json").write_text("{}", encoding="utf-8")
+    old_f.write_text(content, encoding="utf-8")
+    time.sleep(0.05)
+    new_f.write_text(content, encoding="utf-8")
+
+    # index order puts the NEWER copy first -- the old bug's trigger
+    idx = {_hash(content): [new_f, old_f]}
+    grown = content + "12345"                             # diff 5 == thr(50)
+    m = _find_near_match(normalize_text(grown), _hash(grown),
+                         tmp_path / "probe.txt", idx)
+    assert m is not None
+    assert m.canonical_path == old_f
+    assert m.session_dir == sess_old, (
+        "session_dir must belong to the picked canonical, not paths[0]"
+    )
+
+
+def test_pick_canonical_deterministic_on_ctime_ties():
+    """Identical st_ctime must not make the canonical depend on input
+    order -- the path string is the final tiebreaker."""
+
+    class _FakeStat:
+        def __init__(self, ctime):
+            self.st_ctime = ctime
+
+    class _FakePath:
+        def __init__(self, s):
+            self._s = s
+
+        def stat(self):
+            return _FakeStat(1000.0)          # everyone ties
+
+        def __str__(self):
+            return self._s
+
+        def __repr__(self):
+            return self._s
+
+    a = _FakePath(r"C:\s\nc-1\window02\tab03.txt")
+    b = _FakePath(r"C:\s\nc-1\window09\tab01.txt")
+    c = _FakePath(r"C:\s\nc-2\window01\tab01.txt")
+    import itertools
+    winners = {str(_pick_canonical(list(perm)))
+               for perm in itertools.permutations([a, b, c])}
+    assert len(winners) == 1, f"order-dependent canonical: {winners}"

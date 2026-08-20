@@ -84,6 +84,7 @@ For full parameter documentation, see [docs/parameters.md](docs/parameters.md).
 | [Parameters](docs/parameters.md) | Full command reference with all options |
 | [Configuration](docs/config.md) | Folder registry, `...` notation, MRU, search dirs |
 | [Fuzzy Matching](docs/fuzzy-matching.md) | Threshold formula, derivation, customization |
+| [Archive Repair](docs/archive-repair.md) | Pre-v0.2.6 line-ending corruption and how to fix old sessions |
 
 ## Output Structure
 

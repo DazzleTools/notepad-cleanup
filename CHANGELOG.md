@@ -2,6 +2,49 @@
 
 All notable changes to notepad-cleanup will be documented in this file.
 
+## [0.2.6] - 2026-08-20
+
+### Fixed
+- **Extraction no longer writes doubled carriage returns (#17).** Every version
+  before 0.2.6 saved every line of every tab as `\r\r\n`: the text arrived from
+  the Notepad control with Windows line endings and a text-mode file write
+  translated them a second time. Affected files render double-spaced in most
+  editors and never match clean copies of the same note in `compare`. Text is
+  now normalized to `\n` internally at the extraction boundary and written
+  explicitly as `\r\n` -- extraction output is byte-identical to what Notepad
+  itself saves (verified byte-for-byte against a real Notepad save)
+- Sessions created before 0.2.6 remain corrupted on disk -- deliberately no
+  special-case hashing was added to paper over them. See `docs/archive-repair.md`
+  for symptoms and the manual fix; a `repair --line-endings` command is planned (#18)
+- **Near-match results reported the wrong session.** The `Session:` line under a
+  near-match could name a different session than the canonical path shown above
+  it (it came from an arbitrary copy, not the chosen one). Both now describe the
+  same file
+- **Canonical selection is deterministic on creation-time ties.** When multiple
+  copies of the same content share a creation timestamp, the winner was decided
+  by filesystem enumeration order -- potentially a different "original" on a
+  different machine. Ties now break by path, so the same content always resolves
+  to the same canonical file
+
+### Changed
+- **`compare` fuzzy matching is dramatically faster.** Candidate files are read
+  once per run instead of once per file-pair, and two exact pre-filters skip
+  pairs whose character difference provably exceeds the threshold before the
+  expensive comparison runs. Match results are identical by construction --
+  verified against the previous implementation on a real 783-file archive
+  (same matches, ~9.5 minutes down to ~2 seconds). The comparison progress
+  status now shows five pipeline stages instead of four
+- Manifest `chars` counts no longer include carriage returns (they count the
+  text as you'd see it, not its on-disk encoding)
+- The hash cache file is now versioned; caches written by older versions are
+  discarded and rebuilt automatically on the next run (a one-time re-hash)
+
+### Added
+- `docs/archive-repair.md` -- the pre-0.2.6 line-ending corruption: what
+  happened, how to recognize it, and how to fix old sessions
+- `docs/fuzzy-matching.md` -- new sections on the exact candidate pre-filters
+  and on why the comparison must keep `autojunk=False`
+
 ## [0.2.5] - 2026-07-26
 
 ### Fixed

@@ -91,7 +91,10 @@ def save_extraction(windows, extraction_results, output_dir=None):
 
             filename = f"tab{ti+1:02d}.txt"
             filepath = win_dir / filename
-            filepath.write_text(text, encoding="utf-8")
+            # Text is internally "\n"; serialize Windows-native "\r\n"
+            # explicitly. Without newline=, text-mode translation doubled
+            # the CR in already-"\r\n" text -> "\r\r\n" in every file (#17).
+            filepath.write_text(text, encoding="utf-8", newline="\r\n")
 
             tab_entries.append({
                 "index": ti + 1,

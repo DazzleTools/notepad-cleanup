@@ -10,6 +10,7 @@ import hashlib
 import json
 import math
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -102,6 +103,12 @@ def normalize_text(text: str) -> str:
 
     Strips trailing whitespace per line, normalizes line endings to \\n,
     strips trailing newlines.
+
+    Note: archives written before the #17 fix contain "\\r\\r\\n" line
+    endings; those normalize to "x\\n\\n" (a phantom blank line per line)
+    and therefore do NOT hash-match clean copies of the same content. That
+    is deliberate -- no compatibility shim for our own old bug. Repairing
+    the archive files is the remedy (see the 2026-08-19 CRLF-fix DWP).
     """
     lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     lines = [line.rstrip() for line in lines]
@@ -318,21 +325,38 @@ def build_hash_index(session_dirs: list, cache_path: Path = None) -> dict:
     return index
 
 
+# Bump when normalize_text/hashing semantics change: cached hashes were
+# computed under the OLD semantics and files on disk don't change, so
+# mtime+size validation would keep serving stale hashes forever.
+# v2: normalize_text collapses pre-#17 "\r\r\n" corruption before hashing.
+CACHE_VERSION = 2
+
+
 def _load_cache(cache_path: Path) -> dict:
-    """Load hash cache from disk."""
+    """Load hash cache from disk.
+
+    Only a cache written under the current CACHE_VERSION is trusted;
+    anything else (including the pre-versioning flat format) is discarded,
+    forcing a re-hash under current normalization semantics.
+    """
     try:
         if cache_path and cache_path.exists():
-            return json.loads(cache_path.read_text(encoding="utf-8"))
+            data = json.loads(cache_path.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and data.get("version") == CACHE_VERSION:
+                files = data.get("files")
+                if isinstance(files, dict):
+                    return files
     except (json.JSONDecodeError, OSError):
         pass
     return {}
 
 
 def _save_cache(cache: dict, cache_path: Path):
-    """Save hash cache to disk."""
+    """Save hash cache to disk, wrapped in a versioned envelope."""
     try:
         cache_path.write_text(
-            json.dumps(cache, indent=2, ensure_ascii=False),
+            json.dumps({"version": CACHE_VERSION, "files": cache},
+                       indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
     except OSError:
@@ -491,6 +515,10 @@ def find_duplicates(
     new_files = find_content_files(new_dir)
     total = len(new_files)
 
+    # Candidates are read+normalized ONCE per run, not once per (file x
+    # candidate) pair. Built lazily: exact-match-only runs never pay for it.
+    fuzzy_candidates = None
+
     for i, new_file in enumerate(new_files):
         if progress_callback:
             progress_callback(i, total, new_file, "hash")
@@ -538,9 +566,13 @@ def find_duplicates(
                     progress_callback(i, total, new_file,
                                       f"vs: {candidate_name} [chk:{check_step}]")
 
+            if fuzzy_candidates is None:
+                fuzzy_candidates = _build_fuzzy_candidates(hash_index)
+
             best_match = _find_near_match(
                 normalized, new_hash, new_file, hash_index,
                 do_big, size_op, size_limit, _fuzzy_progress,
+                candidates=fuzzy_candidates,
             )
             if best_match:
                 result.near_matches.append(best_match)
@@ -584,6 +616,30 @@ def _fuzzy_size_ok(file_len: int, do_big: bool,
     return True
 
 
+def _build_fuzzy_candidates(hash_index: dict) -> list:
+    """Read and normalize each unique-hash candidate ONCE for a compare run.
+
+    Returns [(canonical_hash, paths, text, length, char_bag), ...].
+    Candidates that cannot be read or normalize to empty are dropped (same
+    files the per-pair loop used to skip). The char bag (a Counter) feeds
+    the B2 lower bound below.
+    """
+    candidates = []
+    for canonical_hash, paths in hash_index.items():
+        try:
+            text = normalize_text(
+                paths[0].read_text(encoding="utf-8", errors="replace")
+            )
+        except OSError:
+            continue
+        if not text:
+            continue
+        candidates.append(
+            (canonical_hash, paths, text, len(text), Counter(text))
+        )
+    return candidates
+
+
 def _find_near_match(
     normalized_text: str,
     new_hash: str,
@@ -593,48 +649,63 @@ def _find_near_match(
     size_op: str = None,
     size_limit: int = None,
     inner_progress=None,
+    candidates: list = None,
 ) -> Optional[DedupMatch]:
     """Find the closest near-match in the hash index.
 
     Uses near_match_threshold() to calculate the allowed character
-    differences based on file size. Pre-filters by size ratio to
-    avoid expensive difflib comparisons.
+    differences based on file size. Before paying for difflib, each
+    candidate passes through two EXACT lower bounds on the char diff --
+    since diff = max_len - matching_chars and matching_chars can never
+    exceed min_len nor the character-multiset intersection:
+
+        B1: diff >= max_len - min_len                (O(1), lengths only)
+        B2: diff >= max_len - sum(min(counts))       (O(n), char bags)
+
+    A candidate whose bound already exceeds the threshold CANNOT match, so
+    skipping it never changes the result -- only the wall-clock. See
+    docs/fuzzy-matching.md and tests/test_fuzzy_bounds.py for the proof
+    and its property tests.
 
     The inner_progress callback receives (candidate_index, total, candidate_path, check_step)
     where check_step is the current stage in the fuzzy pipeline:
-        1 = read      (reading candidate file)
-        2 = ratio     (size ratio pre-filter)
-        3 = size      (big-file threshold check)
-        4 = char-diff (expensive SequenceMatcher comparison)
+        1 = length-bound (B1 pre-filter, cheapest)
+        2 = ratio        (size ratio pre-filter)
+        3 = size         (big-file threshold check)
+        4 = char-bag     (B2 pre-filter)
+        5 = char-diff    (expensive SequenceMatcher comparison)
+
+    candidates: pre-read list from _build_fuzzy_candidates(); built on the
+    fly when omitted (single-call convenience for tests/tools).
 
     Returns the best match or None.
     """
+    if candidates is None:
+        candidates = _build_fuzzy_candidates(hash_index)
+
     new_len = len(normalized_text)
     allowed = near_match_threshold(new_len)
     best_match = None
     best_diff = allowed + 1  # Start above threshold
-    fuzzy_total = len(hash_index)
+    fuzzy_total = len(candidates)
+    new_bag = None  # built lazily -- only needed once B1 lets something through
 
-    for j, (canonical_hash, paths) in enumerate(hash_index.items()):
+    for j, (canonical_hash, paths, canonical_text, canon_len, canon_bag) \
+            in enumerate(candidates):
         canonical = paths[0]
 
-        # Step 1: Read candidate
+        # Step 1: B1 length-delta lower bound (exact -- can never prune a match)
         if inner_progress:
             inner_progress(j, fuzzy_total, canonical, 1)
-        try:
-            canonical_text = normalize_text(
-                canonical.read_text(encoding="utf-8", errors="replace")
-            )
-        except OSError:
+        max_len = max(new_len, canon_len)
+        effective_threshold = near_match_threshold(max_len)
+        if max_len - min(new_len, canon_len) > effective_threshold:
             continue
 
         # Step 2: Size ratio pre-filter
         if inner_progress:
             inner_progress(j, fuzzy_total, canonical, 2)
-        canon_len = len(canonical_text)
-        if canon_len == 0:
-            continue
-        ratio = max(new_len, canon_len) / max(min(new_len, canon_len), 1)
+        ratio = max_len / max(min(new_len, canon_len), 1)
         if ratio > 2.0:
             continue
 
@@ -644,23 +715,32 @@ def _find_near_match(
         if not _fuzzy_size_ok(canon_len, include_big, size_op, size_limit):
             continue
 
-        # Step 4: Character diff (the expensive one)
+        # Step 4: B2 char-bag lower bound (exact -- can never prune a match)
         if inner_progress:
             inner_progress(j, fuzzy_total, canonical, 4)
+        if new_bag is None:
+            new_bag = Counter(normalized_text)
+        if max_len - sum((new_bag & canon_bag).values()) > effective_threshold:
+            continue
+
+        # Step 5: Character diff (the expensive one)
+        if inner_progress:
+            inner_progress(j, fuzzy_total, canonical, 5)
         diff = count_char_diffs(normalized_text, canonical_text)
 
         # Use the heuristic threshold for the larger of the two files
-        max_len = max(new_len, canon_len)
-        effective_threshold = near_match_threshold(max_len)
-
         if diff <= effective_threshold and diff < best_diff:
             best_diff = diff
+            canonical_pick = _pick_canonical(paths)
             best_match = DedupMatch(
                 new_path=new_file,
-                canonical_path=_pick_canonical(paths),
+                canonical_path=canonical_pick,
                 match_type="near",
                 char_diff=diff,
-                session_dir=_get_session_dir(canonical),
+                # session_dir must describe the SAME file as canonical_path
+                # (was paths[0], which misreported the session ~97% of the
+                # time a hash had multiple copies)
+                session_dir=_get_session_dir(canonical_pick),
                 new_hash=new_hash,
                 canonical_hash=canonical_hash,
             )
@@ -681,7 +761,11 @@ def _pick_canonical(paths: list) -> Path:
     if len(paths) == 1:
         return paths[0]
 
-    # Sort by creation time (oldest first), then prefer organized/
+    # Sort by creation time (oldest first), then prefer organized/, then by
+    # case-normalized path string. The final element makes ties DETERMINISTIC:
+    # without it, files created in the same operation (identical st_ctime)
+    # were won by whichever the filesystem enumerated first -- a different
+    # canonical on a different machine for the same content.
     def _sort_key(p):
         try:
             ctime = p.stat().st_ctime
@@ -689,7 +773,7 @@ def _pick_canonical(paths: list) -> Path:
             ctime = float("inf")  # missing files sort last
         is_organized = "organized" in str(p)
         # Lower = better: oldest first, organized before raw
-        return (ctime, 0 if is_organized else 1)
+        return (ctime, 0 if is_organized else 1, str(p).lower())
 
     ranked = sorted(paths, key=_sort_key)
     return ranked[0]

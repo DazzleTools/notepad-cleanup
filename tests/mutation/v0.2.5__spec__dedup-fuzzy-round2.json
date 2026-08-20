@@ -52,9 +52,9 @@
     {
       "id": "N8",
       "file": "notepad_cleanup/dedup.py",
-      "original": "canonical_path=_pick_canonical(paths),",
-      "mutated": "canonical_path=paths[0],",
-      "note": "Near-match ignores canonical selection, returns arbitrary first path"
+      "original": "            canonical_pick = _pick_canonical(paths)",
+      "mutated": "            canonical_pick = paths[0]",
+      "note": "Near-match ignores canonical selection, uses arbitrary first path (retargeted after perf refactor)"
     },
     {
       "id": "N9",
@@ -66,9 +66,9 @@
     {
       "id": "N10",
       "file": "notepad_cleanup/dedup.py",
-      "original": "return (ctime, 0 if is_organized else 1)",
-      "mutated": "return (ctime, 1 if is_organized else 0)",
-      "note": "Tie-break flip: prefers raw over organized on ctime ties"
+      "original": "return (ctime, 0 if is_organized else 1, str(p).lower())",
+      "mutated": "return (ctime, 1 if is_organized else 0, str(p).lower())",
+      "note": "Tie-break flip: prefers raw over organized on ctime ties (retargeted after perf refactor)"
     }
   ],
   "test_command": [
